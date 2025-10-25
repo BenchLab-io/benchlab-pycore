@@ -25,9 +25,9 @@ print(info)
 
 benchlab/
 ├── core/
-│   ├── serial_io.py
-│   ├── sensor_translation.py
-│   └── ...
+│ ├── serial_io.py
+│ ├── sensor_translation.py
+│ └── ...
 
 ## Development
 
