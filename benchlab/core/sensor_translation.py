@@ -3,8 +3,10 @@
 from .structures import SENSOR_VIN_NUM
 from .utils import format_temp
 
+
 def translate_sensor_struct(sensor_struct):
-    """Return a flat dict of interpreted sensor values suitable for CSV, graphs, MQTT, etc."""
+    """Return a flat dict of interpreted sensor values
+        suitable for CSV, graphs, MQTT, etc."""
     data = {}
 
     # Power

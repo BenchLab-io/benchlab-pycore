@@ -2,7 +2,7 @@
 Core structures, enums, and constants for BENCHLAB
 """
 
-from ctypes import *
+from ctypes import Structure, c_uint8, c_uint16, c_int16, c_int32
 from enum import IntEnum
 
 # --- BENCHLAB Constants ---
