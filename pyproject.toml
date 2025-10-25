@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools>=64", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+# 👇 The name people install from PyPI
+name = "benchlab-pycore"
+version = "0.1.0"
+description = "BENCHLAB PyCore - Python Interface for BENCHLAB"
+readme = "README.md"
+requires-python = ">=3.8"
+license = {text = "MIT"}
+authors = [
+  {name = "Pieter Plaisier", email = "contact@benchlab.io"}
+]
+keywords = ["telemetry", "hardware", "benchlab", "sensors"]
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "License :: OSI Approved :: MIT License",
+  "Operating System :: OS Independent"
+]
+dependencies = [
+  "pyserial"
+]
+
+[project.urls]
+Homepage = "https://github.com/BenchLab-io/benchlab-pycore"
+Issues = "https://github.com/BenchLab-io/benchlab-pycore/issues"
