@@ -2,6 +2,8 @@
 Utility helpers for BENCHLAB
 """
 
+def format_chip_temp(value):
+    return round(value / 1, 1)
 
 def format_temp(value):
     temp_c = value / 10
