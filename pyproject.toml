@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "benchlab-pycore"
-version = "0.1.1"
+version = "0.2.0"
 description = "BENCHLAB PyCore - Python Interface for BENCHLAB"
 readme = "README.md"
 requires-python = ">=3.8"
@@ -25,3 +25,4 @@ dependencies = [
 [project.urls]
 Homepage = "https://github.com/BenchLab-io/benchlab-pycore"
 Issues = "https://github.com/BenchLab-io/benchlab-pycore/issues"
+
