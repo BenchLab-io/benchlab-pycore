@@ -42,12 +42,12 @@ def format_temp(value: Union[int, float]) -> Optional[float]:
     Note:
         This function converts from tenths of degrees Celsius to degrees Celsius.
         Returns None for values outside the range -1000 to 1000 (representing
-        -100.0°C to 100.0°C).
+        -100.0 deg C to 100.0 deg C).
     
     Example:
-        >>> temp = format_temp(255)  # 25.5°C
-        >>> print(f"Temp: {temp}°C")
-        Temp: 25.5°C
+        >>> temp = format_temp(255)  # 25.5 deg C
+        >>> print(f"Temp: {temp} deg C")
+        Temp: 25.5 deg C
         
         >>> temp = format_temp(1500)  # Invalid range
         >>> print(temp)

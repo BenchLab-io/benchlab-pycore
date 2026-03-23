@@ -23,7 +23,7 @@ pip install benchlab-pycore
 
 ```python
 import serial
-from benchlab.core import get_fleet_info, read_sensors, translate_sensor_struct
+from benchlab_pycore.core import get_fleet_info, read_sensors, translate_sensor_struct
 
 # Discover all connected BENCHLAB devices
 devices = get_fleet_info()
@@ -43,7 +43,7 @@ if devices:
         
         # Access sensor values
         print(f"CPU Power: {data['CPU_Power']}W")
-        print(f"Chip Temperature: {data['Chip_Temp']}°C")
+        print(f"Chip Temperature: {data['Chip_Temp']} deg C")
         print(f"12V Voltage: {data['12V_Voltage']}V")
     
     ser.close()
@@ -53,7 +53,7 @@ if devices:
 
 ```python
 import serial
-from benchlab.core import get_benchlab_ports, read_sensors, translate_sensor_struct
+from benchlab_pycore.core import get_benchlab_ports, read_sensors, translate_sensor_struct
 
 def read_device_sensors(port):
     """Read sensors from a specific port with error handling."""
@@ -157,9 +157,9 @@ The `translate_sensor_struct()` function returns a dictionary with the following
 - `EPS1_Power` through `HPWR2_Power`: Power per rail (W)
 
 #### Temperature Measurements
-- `Chip_Temp`: Chip temperature (°C)
-- `Ambient_Temp`: Ambient temperature (°C)
-- `Temp_Sensor_1` through `Temp_Sensor_4`: Additional temperature sensors (°C)
+- `Chip_Temp`: Chip temperature (deg C)
+- `Ambient_Temp`: Ambient temperature (deg C)
+- `Temp_Sensor_1` through `Temp_Sensor_4`: Additional temperature sensors (deg C)
 - `Humidity`: Relative humidity (%)
 
 #### Fan Measurements
@@ -175,7 +175,7 @@ The `translate_sensor_struct()` function returns a dictionary with the following
 ```python
 import serial
 import paho.mqtt.client as mqtt
-from benchlab.core import get_fleet_info, read_sensors, translate_sensor_struct
+from benchlab_pycore.core import get_fleet_info, read_sensors, translate_sensor_struct
 
 def publish_sensor_data(client, device_port):
     """Read and publish sensor data to MQTT."""
@@ -211,7 +211,7 @@ for device in devices:
 import csv
 import serial
 import time
-from benchlab.core import get_fleet_info, read_sensors, translate_sensor_struct
+from benchlab_pycore.core import get_fleet_info, read_sensors, translate_sensor_struct
 
 def log_device_data(device_port, duration_seconds=60, interval_seconds=1):
     """Log sensor data to CSV file."""
@@ -365,7 +365,7 @@ Testing benchlab-pycore library with physical hardware
 
 --- Data Validation ---
 ✅ System power in reasonable range: 250.5W
-✅ Chip temperature in reasonable range: 65.0°C
+✅ Chip temperature in reasonable range: 65.0 deg C
 ✅ 12V voltage in reasonable range: 12.05V
 
 --- All Available Sensors (45 total) ---
@@ -491,7 +491,7 @@ python -m twine upload dist/*
 
 ## License
 
-MIT License © 2025 BenchLab Contributors
+MIT License (c) 2025 BenchLab Contributors
 
 ## Support
 

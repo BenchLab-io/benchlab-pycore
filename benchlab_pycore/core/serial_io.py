@@ -6,7 +6,7 @@ with BENCHLAB hardware devices via serial communication. It handles device
 discovery, vendor information reading, sensor data acquisition, and UID reading.
 
 Example:
-    >>> from benchlab.core import get_fleet_info, read_sensors
+    >>> from benchlab_pycore.core import get_fleet_info, read_sensors
     >>> devices = get_fleet_info()
     >>> if devices:
     >>>     # Connect to first device
@@ -24,7 +24,7 @@ import serial
 import serial.tools.list_ports
 from ctypes import sizeof
 from typing import List, Dict, Optional, Tuple, Union, Any
-from benchlab.core.structures import (
+from benchlab_pycore.core.structures import (
     VendorDataStruct,
     SensorStruct,
     BENCHLAB_CMD,

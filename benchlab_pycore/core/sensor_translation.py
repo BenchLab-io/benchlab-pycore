@@ -28,7 +28,7 @@ def translate_sensor_struct(sensor_struct: SensorStruct) -> Dict[str, Any]:
         Temperature values are converted from tenths of degrees to degrees Celsius.
     
     Example:
-        >>> from benchlab.core import read_sensors, translate_sensor_struct
+        >>> from benchlab_pycore.core import read_sensors, translate_sensor_struct
         >>> ser = serial.Serial('COM3', 115200)
         >>> sensors = read_sensors(ser)
         >>> if sensors:

@@ -37,9 +37,9 @@ def main():
     for file_path in files_to_check:
         valid, error = check_syntax(file_path)
         if valid:
-            print(f"✓ {file_path}")
+            print(f"CHECKED: {file_path}")
         else:
-            print(f"✗ {file_path}: {error}")
+            print(f"ERROR: {file_path}: {error}")
             all_valid = False
     
     if all_valid:

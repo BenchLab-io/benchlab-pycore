@@ -37,28 +37,28 @@ def print_header(title: str) -> None:
 
 def print_success(message: str) -> None:
     """Print a success message."""
-    print(f"✅ {message}")
+    print(f"SUCCESS: {message}")
 
 def print_error(message: str) -> None:
     """Print an error message."""
-    print(f"❌ {message}")
+    print(f"ERROR: {message}")
 
 def print_info(message: str) -> None:
     """Print an informational message."""
-    print(f"ℹ️  {message}")
+    print(f"INFO: {message}")
 
 def print_warning(message: str) -> None:
     """Print a warning message."""
-    print(f"⚠️  {message}")
+    print(f"WARNING: {message}")
 
 def test_device_discovery() -> List[Dict[str, str]]:
     """Test device discovery functionality."""
     print_header("DEVICE DISCOVERY TEST")
     
     try:
-        from benchlab.core import get_benchlab_ports, find_benchlab_devices, get_fleet_info
+        from benchlab_pycore.core import get_benchlab_ports, find_benchlab_devices, get_fleet_info
     except ImportError as e:
-        print_error(f"Failed to import benchlab.core: {e}")
+        print_error(f"Failed to import benchlab_pycore.core: {e}")
         return []
     
     # Test 1: Port Discovery
@@ -126,7 +126,7 @@ def test_vendor_info(ser: serial.Serial) -> bool:
     print_header("VENDOR INFORMATION TEST")
     
     try:
-        from benchlab.core import read_device
+        from benchlab_pycore.core import read_device
         
         vendor_info = read_device(ser)
         if vendor_info:
@@ -155,7 +155,7 @@ def test_uid_reading(ser: serial.Serial) -> bool:
     print_header("UID READING TEST")
     
     try:
-        from benchlab.core import read_uid
+        from benchlab_pycore.core import read_uid
         
         uid = read_uid(ser)
         if uid:
@@ -181,7 +181,7 @@ def test_sensor_reading(ser: serial.Serial) -> bool:
     print_header("SENSOR READING TEST")
     
     try:
-        from benchlab.core import read_sensors, translate_sensor_struct
+        from benchlab_pycore.core import read_sensors, translate_sensor_struct
         
         print_info("Reading raw sensor data...")
         sensors = read_sensors(ser)
@@ -226,10 +226,10 @@ def test_sensor_reading(ser: serial.Serial) -> bool:
                 if 'Chip_Temp' in data:
                     temp = data['Chip_Temp']
                     if temp < -50 or temp > 150:  # Unreasonable temperature range
-                        print_warning(f"Chip temperature seems unusual: {temp}°C")
+                        print_warning(f"Chip temperature seems unusual: {temp} deg C")
                         validation_passed = False
                     else:
-                        print_success(f"Chip temperature in reasonable range: {temp}°C")
+                        print_success(f"Chip temperature in reasonable range: {temp} deg C")
                 
                 if '12V_Voltage' in data:
                     voltage = data['12V_Voltage']
@@ -289,19 +289,19 @@ def run_comprehensive_test() -> bool:
         # Summary
         print_header("TEST SUMMARY")
         print_info("Test Results:")
-        print_info(f"  Device Discovery: {'✅ PASS' if fleet else '❌ FAIL'}")
-        print_info(f"  Serial Connection: {'✅ PASS' if ser else '❌ FAIL'}")
-        print_info(f"  Vendor Info: {'✅ PASS' if vendor_ok else '❌ FAIL'}")
-        print_info(f"  UID Reading: {'✅ PASS' if uid_ok else '❌ FAIL'}")
-        print_info(f"  Sensor Reading: {'✅ PASS' if sensor_ok else '❌ FAIL'}")
+        print_info(f"  Device Discovery: {'SUCCESS' if fleet else 'ERROR'}")
+        print_info(f"  Serial Connection: {'SUCCESS' if ser else 'ERROR'}")
+        print_info(f"  Vendor Info: {'SUCCESS' if vendor_ok else 'ERROR'}")
+        print_info(f"  UID Reading: {'SUCCESS' if uid_ok else 'ERROR'}")
+        print_info(f"  Sensor Reading: {'SUCCESS' if sensor_ok else 'ERROR'}")
         
         overall_success = fleet and ser and vendor_ok and uid_ok and sensor_ok
         
         if overall_success:
-            print_success("\n🎉 ALL TESTS PASSED! Your BENCHLAB device is working correctly.")
+            print_success("\nALL TESTS PASSED! Your BENCHLAB device is working correctly.")
             print_info("The benchlab-pycore library is ready for use.")
         else:
-            print_error("\n❌ Some tests failed. Please check the error messages above.")
+            print_error("\nSome tests failed. Please check the error messages above.")
             print_info("Common issues:")
             print_info("  - Device not properly connected")
             print_info("  - USB driver issues")

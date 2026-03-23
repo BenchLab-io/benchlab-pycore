@@ -5,7 +5,7 @@ from ctypes import Structure, sizeof
 from unittest.mock import patch, MagicMock, Mock
 import serial
 
-from benchlab.core import (
+from benchlab_pycore.core import (
     get_benchlab_ports,
     find_benchlab_devices,
     get_fleet_info,
@@ -51,7 +51,7 @@ def test_imports():
 # -----------------------
 # Test device discovery functions
 # -----------------------
-@patch("benchlab.core.serial_io.serial.tools.list_ports.comports")
+@patch("benchlab_pycore.core.serial_io.serial.tools.list_ports.comports")
 def test_get_benchlab_ports_success(mock_comports):
     """Test get_benchlab_ports with mock ports."""
     # Mock port objects
@@ -69,7 +69,7 @@ def test_get_benchlab_ports_success(mock_comports):
     assert result == [{"port": "COM3"}]
 
 
-@patch("benchlab.core.serial_io.serial.tools.list_ports.comports")
+@patch("benchlab_pycore.core.serial_io.serial.tools.list_ports.comports")
 def test_get_benchlab_ports_serial_exception(mock_comports):
     """Test get_benchlab_ports with serial exception."""
     mock_comports.side_effect = serial.SerialException("Port enumeration failed")
@@ -78,8 +78,8 @@ def test_get_benchlab_ports_serial_exception(mock_comports):
         get_benchlab_ports()
 
 
-@patch("benchlab.core.serial_io.serial.tools.list_ports.comports")
-@patch("benchlab.core.serial_io.serial.Serial")
+@patch("benchlab_pycore.core.serial_io.serial.tools.list_ports.comports")
+@patch("benchlab_pycore.core.serial_io.serial.Serial")
 def test_find_benchlab_devices_success(mock_serial, mock_comports):
     """Test find_benchlab_devices with mock devices."""
     # Mock port objects
@@ -101,8 +101,8 @@ def test_find_benchlab_devices_success(mock_serial, mock_comports):
     assert result[0]["fw"] == "1.0"
 
 
-@patch("benchlab.core.serial_io.serial.tools.list_ports.comports")
-@patch("benchlab.core.serial_io.serial.Serial")
+@patch("benchlab_pycore.core.serial_io.serial.tools.list_ports.comports")
+@patch("benchlab_pycore.core.serial_io.serial.Serial")
 def test_find_benchlab_devices_serial_failure(mock_serial, mock_comports):
     """Test find_benchlab_devices with serial connection failure."""
     mock_comports.return_value = [("COM3", "desc", "USB VID:PID=0483:5740")]
@@ -118,7 +118,7 @@ def test_find_benchlab_devices_serial_failure(mock_serial, mock_comports):
 # -----------------------
 # Test serial communication functions
 # -----------------------
-@patch("benchlab.core.serial_io.read_uart")
+@patch("benchlab_pycore.core.serial_io.read_uart")
 def test_read_device_success(mock_read_uart):
     """Test read_device with successful read."""
     mock_read_uart.return_value = bytes([0xEE, 0x10, 0x01])
@@ -133,7 +133,7 @@ def test_read_device_success(mock_read_uart):
     }
 
 
-@patch("benchlab.core.serial_io.read_uart")
+@patch("benchlab_pycore.core.serial_io.read_uart")
 def test_read_device_uart_failure(mock_read_uart):
     """Test read_device with UART read failure."""
     mock_read_uart.return_value = None
@@ -144,7 +144,7 @@ def test_read_device_uart_failure(mock_read_uart):
     assert result is None
 
 
-@patch("benchlab.core.serial_io.read_uart")
+@patch("benchlab_pycore.core.serial_io.read_uart")
 def test_read_sensors_success(mock_read_uart):
     """Test read_sensors with successful read."""
     mock_read_uart.return_value = bytes([0] * sizeof(SensorStruct))
@@ -155,7 +155,7 @@ def test_read_sensors_success(mock_read_uart):
     assert isinstance(result, SensorStruct)
 
 
-@patch("benchlab.core.serial_io.read_uart")
+@patch("benchlab_pycore.core.serial_io.read_uart")
 def test_read_sensors_uart_failure(mock_read_uart):
     """Test read_sensors with UART read failure."""
     mock_read_uart.return_value = None
@@ -166,7 +166,7 @@ def test_read_sensors_uart_failure(mock_read_uart):
     assert result is None
 
 
-@patch("benchlab.core.serial_io.read_uart")
+@patch("benchlab_pycore.core.serial_io.read_uart")
 def test_read_uid_success(mock_read_uart):
     """Test read_uid with successful read."""
     mock_read_uart.return_value = bytes([0x12, 0x34, 0x56, 0x78, 0x9A, 0xBC, 0xDE, 0xF0, 0x11, 0x22, 0x33, 0x44])
@@ -177,7 +177,7 @@ def test_read_uid_success(mock_read_uart):
     assert result == "123456789ABCDEF011223344"
 
 
-@patch("benchlab.core.serial_io.read_uart")
+@patch("benchlab_pycore.core.serial_io.read_uart")
 def test_read_uid_retries(mock_read_uart):
     """Test read_uid with retries."""
     mock_read_uart.side_effect = [None, None, bytes([0x12, 0x34, 0x56, 0x78, 0x9A, 0xBC, 0xDE, 0xF0, 0x11, 0x22, 0x33, 0x44])]
@@ -189,7 +189,7 @@ def test_read_uid_retries(mock_read_uart):
     assert mock_read_uart.call_count == 3
 
 
-@patch("benchlab.core.serial_io.read_uart")
+@patch("benchlab_pycore.core.serial_io.read_uart")
 def test_read_uid_all_retries_fail(mock_read_uart):
     """Test read_uid when all retries fail."""
     mock_read_uart.return_value = None
@@ -310,10 +310,10 @@ def test_sensor_translation_empty_struct():
     assert "Fan1_Duty" in translated
 
 
-@patch("benchlab.core.serial_io.get_benchlab_ports")
-@patch("benchlab.core.serial_io.read_device")
-@patch("benchlab.core.serial_io.read_uid")
-@patch("benchlab.core.serial_io.serial.Serial")
+@patch("benchlab_pycore.core.serial_io.get_benchlab_ports")
+@patch("benchlab_pycore.core.serial_io.read_device")
+@patch("benchlab_pycore.core.serial_io.read_uid")
+@patch("benchlab_pycore.core.serial_io.serial.Serial")
 def test_get_fleet_info_no_devices(mock_serial, mock_read_uid, mock_read_device, mock_get_ports):
     """Test get_fleet_info when no devices are found."""
     mock_get_ports.return_value = []
@@ -322,10 +322,10 @@ def test_get_fleet_info_no_devices(mock_serial, mock_read_uid, mock_read_device,
     assert result == []
 
 
-@patch("benchlab.core.serial_io.get_benchlab_ports")
-@patch("benchlab.core.serial_io.read_device")
-@patch("benchlab.core.serial_io.read_uid")
-@patch("benchlab.core.serial_io.serial.Serial")
+@patch("benchlab_pycore.core.serial_io.get_benchlab_ports")
+@patch("benchlab_pycore.core.serial_io.read_device")
+@patch("benchlab_pycore.core.serial_io.read_uid")
+@patch("benchlab_pycore.core.serial_io.serial.Serial")
 def test_get_fleet_info_device_read_failure(mock_serial, mock_read_uid, mock_read_device, mock_get_ports):
     """Test get_fleet_info when device reading fails."""
     mock_get_ports.return_value = [{"port": "COM3"}]
