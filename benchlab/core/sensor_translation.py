@@ -1,12 +1,41 @@
 # benchlab/core/sensor_translation.py
 
-from .structures import SENSOR_VIN_NUM
+from typing import Dict, Any
+from .structures import SENSOR_VIN_NUM, SensorStruct
 from .utils import format_chip_temp, format_temp
 
 
-def translate_sensor_struct(sensor_struct):
-    """Return a flat dict of interpreted sensor values
-        suitable for CSV, graphs, MQTT, etc."""
+def translate_sensor_struct(sensor_struct: SensorStruct) -> Dict[str, Any]:
+    """Return a flat dict of interpreted sensor values suitable for CSV, graphs, MQTT, etc.
+    
+    Args:
+        sensor_struct (SensorStruct): Raw sensor data from read_sensors().
+    
+    Returns:
+        Dict[str, Any]: Dictionary containing human-readable sensor values with the following keys:
+            - Power measurements: 'SYS_Power', 'CPU_Power', 'GPU_Power', 'MB_Power'
+            - Voltage measurements: 'EPS1_Voltage', 'EPS2_Voltage', '12V_Voltage', etc.
+            - Current measurements: 'EPS1_Current', 'EPS2_Current', '12V_Current', etc.
+            - Power measurements: 'EPS1_Power', 'EPS2_Power', '12V_Power', etc.
+            - Temperature measurements: 'Chip_Temp', 'Ambient_Temp', 'Temp_Sensor_1', etc.
+            - Fan measurements: 'Fan1_Duty', 'Fan1_RPM', 'Fan1_Status', etc.
+            - Other: 'Vdd', 'Vref', 'Humidity', 'FanExtDuty'
+    
+    Note:
+        All voltage values are converted from millivolts to volts.
+        All power values are converted from milliwatts to watts.
+        All current values are converted from milliamps to amps.
+        Temperature values are converted from tenths of degrees to degrees Celsius.
+    
+    Example:
+        >>> from benchlab.core import read_sensors, translate_sensor_struct
+        >>> ser = serial.Serial('COM3', 115200)
+        >>> sensors = read_sensors(ser)
+        >>> if sensors:
+        >>>     data = translate_sensor_struct(sensors)
+        >>>     print(f"CPU Power: {data['CPU_Power']}W")
+        >>>     print(f"Chip Temp: {data['Chip_Temp']}°C")
+    """
     data = {}
 
     # Power

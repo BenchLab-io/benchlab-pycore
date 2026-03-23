@@ -1,11 +1,15 @@
 # benchlab/__init__.py
 
-from importlib.metadata import version, PackageNotFoundError
+from importlib.metadata import version as get_version, PackageNotFoundError
+from .version import __version__
 
+# Fallback to package metadata if available
 try:
-    __version__ = version("benchlab-pycore")
+    installed_version = get_version("benchlab-pycore")
+    if installed_version != __version__:
+        __version__ = installed_version
 except PackageNotFoundError:
-    __version__ = "0.1.1"
+    pass  # Use the version from version.py
 
 from . import core
 

@@ -54,3 +54,35 @@ venv.bak/
 
 # Windows
 Thumbs.db
+
+# Logs
+*.log
+logs/
+*.log.*
+
+# Temporary files
+*.tmp
+*.swp
+*.swo
+*~
+
+# OS generated files
+.directory
+ehthumbs.db
+Desktop.ini
+
+# Python local settings
+.local/
+.pytest_cache/
+.mypy_cache/
+.pytype/
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# BenchLAB specific
+*.csv
+sensor_logs/
+device_test_output/

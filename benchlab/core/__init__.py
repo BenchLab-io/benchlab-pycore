@@ -23,7 +23,7 @@ from .structures import (
     SENSOR_POWER_NUM,
     FAN_NUM,
 )
-from .utils import format_temp
+from .utils import format_temp, format_chip_temp
 
 __all__ = [
     # serial_io"
@@ -50,4 +50,5 @@ __all__ = [
     "FAN_NUM",
     # utils
     "format_temp",
+    "format_chip_temp",
 ]
