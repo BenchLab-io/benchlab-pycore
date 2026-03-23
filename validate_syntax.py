@@ -22,13 +22,13 @@ def check_syntax(file_path):
 def main():
     """Check syntax of all Python files in the project."""
     files_to_check = [
-        'benchlab/__init__.py',
-        'benchlab/version.py',
-        'benchlab/core/__init__.py',
-        'benchlab/core/serial_io.py',
-        'benchlab/core/sensor_translation.py',
-        'benchlab/core/structures.py',
-        'benchlab/core/utils.py',
+        'benchlab_pycore/__init__.py',
+        'benchlab_pycore/version.py',
+        'benchlab_pycore/core/__init__.py',
+        'benchlab_pycore/core/serial_io.py',
+        'benchlab_pycore/core/sensor_translation.py',
+        'benchlab_pycore/core/structures.py',
+        'benchlab_pycore/core/utils.py',
         'tests/test_core.py'
     ]
     
