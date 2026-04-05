@@ -23,7 +23,7 @@ import logging
 import serial
 import serial.tools.list_ports
 from ctypes import sizeof
-from typing import List, Dict, Optional, Tuple, Union, Any
+from typing import List, Dict, Optional, Union
 from benchlab_pycore.core.structures import (
     VendorDataStruct,
     SensorStruct,
@@ -32,7 +32,7 @@ from benchlab_pycore.core.structures import (
 
 # --- Logger setup ---
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
-logger = logging.getLogger("mqtt_bridge.serial_io")
+logger = logging.getLogger("benchlab_pycore.core.serial_io")
 logger.setLevel(getattr(logging, LOG_LEVEL, logging.INFO))
 
 if not logger.handlers:
@@ -138,20 +138,21 @@ def get_fleet_info() -> List[Dict[str, Union[str, int]]]:
 
     for port in benchlab_ports:
         try:
-            ser = serial.Serial(port, 115200, timeout=1)
-            device_info = read_device(ser)
-            uid = read_uid(ser)
-            fleet.append(
-                {
-                    "port": port,
-                    "firmware": (
-                        device_info.get("FwVersion") if device_info else "?"
-                    ),
-                    "uid": uid,
-                }
-            )
-            ser.close()
-            logger.debug("Added device to fleet: %s", uid)
+            with serial.Serial(port, 115200, timeout=1) as ser:
+                device_info = read_device(ser)
+                uid = read_uid(ser)
+                fleet.append(
+                    {
+                        "port": port,
+                        "firmware": (
+                            device_info.get("FwVersion") if device_info else "?"
+                        ),
+                        "uid": uid,
+                    }
+                )
+                logger.debug("Added device to fleet: %s", uid)
+        except serial.SerialException as e:
+            logger.warning("Failed to open serial port %s: %s", port, e)
         except Exception as e:
             logger.warning("Failed to get device info from %s: %s", port, e)
     return fleet
@@ -252,7 +253,7 @@ def read_device(ser: serial.Serial) -> Optional[Dict[str, int]]:
             "ProductId": vendor_struct.ProductId,
             "FwVersion": vendor_struct.FwVersion,
         }
-    except (serial.SerialException, OSError, ValueError) as e:
+    except (serial.SerialException, OSError, ValueError, TypeError) as e:
         logger.warning("Failed to read device: %s", e)
         return None
 

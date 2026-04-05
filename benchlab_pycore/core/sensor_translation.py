@@ -41,8 +41,8 @@ def translate_sensor_struct(sensor_struct: SensorStruct) -> Dict[str, Any]:
     # Power
     power = sensor_struct.PowerReadings
     power_cpu = (power[0].Power + power[1].Power) / 1000
-    power_gpu = sum([power[i].Power for i in range(6, 11)]) / 1000
-    power_mb = sum([power[i].Power for i in range(2, 6)]) / 1000
+    power_gpu = sum(power[i].Power for i in range(6, 11)) / 1000
+    power_mb = sum(power[i].Power for i in range(2, 6)) / 1000
     power_system = power_cpu + power_gpu + power_mb
     data.update({
         "SYS_Power": power_system,

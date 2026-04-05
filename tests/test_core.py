@@ -252,7 +252,7 @@ def test_sensor_translation_comprehensive():
     assert translated["VIN_12"] == 12.0
     
     # Check temperature conversions
-    assert translated["Chip_Temp"] == 420.0
+    assert translated["Chip_Temp"] == 42.0
     assert translated["Ambient_Temp"] == 25.5
     assert translated["Humidity"] == 45.0
     assert translated["Temp_Sensor_1"] == 10.0
@@ -288,10 +288,17 @@ def test_format_temp_invalid_range():
 
 def test_format_chip_temp():
     """Test format_chip_temp utility."""
-    assert format_chip_temp(42) == 42.0
+    assert format_chip_temp(420) == 42.0
     assert format_chip_temp(0) == 0.0
-    assert format_chip_temp(-10) == -10.0
-    assert format_chip_temp(100) == 100.0
+    assert format_chip_temp(-100) == -10.0
+    assert format_chip_temp(1000) == 100.0
+
+
+def test_format_chip_temp_invalid_range():
+    """Test format_chip_temp with values outside valid range."""
+    assert format_chip_temp(1001) is None
+    assert format_chip_temp(-1001) is None
+    assert format_chip_temp(1500) is None
 
 
 # -----------------------
@@ -375,7 +382,7 @@ def test_complete_sensor_reading_workflow():
     assert data["MB_Power"] == 290.0     # 50W + 100W + 20W + 120W
     assert data["SYS_Power"] == 1540.0   # Total system power
     
-    assert data["Chip_Temp"] == 650.0
+    assert data["Chip_Temp"] == 65.0
     assert data["Ambient_Temp"] == 22.5
     assert data["Humidity"] == 45.0
 

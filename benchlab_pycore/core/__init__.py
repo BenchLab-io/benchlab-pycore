@@ -26,7 +26,7 @@ from .structures import (
 from .utils import format_temp, format_chip_temp
 
 __all__ = [
-    # serial_io"
+    # serial_io
     "get_benchlab_ports",
     "find_benchlab_devices",
     "get_fleet_info",
