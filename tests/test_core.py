@@ -216,12 +216,10 @@ def test_sensor_translation_comprehensive():
     
     # Set up VIN readings
     for i in range(SENSOR_VIN_NUM):
-        s.Vin[i] = i * 1000  # 0V, 1V, 2V, ..., 12V
-    
     # Set up other values
     s.Vdd = 3300
     s.Vref = 2500
-    s.Tchip = 420  # 42.0°C
+    s.Tchip = 42   # 42.0°C (already in degrees from microcontroller)
     s.Tamb = 255   # 25.5°C
     s.Hum = 450    # 45.0%
     
@@ -288,10 +286,10 @@ def test_format_temp_invalid_range():
 
 def test_format_chip_temp():
     """Test format_chip_temp utility."""
-    assert format_chip_temp(420) == 42.0
+    assert format_chip_temp(42) == 42.0
     assert format_chip_temp(0) == 0.0
-    assert format_chip_temp(-100) == -10.0
-    assert format_chip_temp(1000) == 100.0
+    assert format_chip_temp(-100) == -100.0
+    assert format_chip_temp(100) == 100.0
 
 
 def test_format_chip_temp_invalid_range():
@@ -369,7 +367,7 @@ def test_complete_sensor_reading_workflow():
         s.PowerReadings[i].Power = 200000  # 200W each
     
     # Temperature and other sensors
-    s.Tchip = 650      # 65.0°C
+    s.Tchip = 65       # 65.0°C (already in degrees from microcontroller)
     s.Tamb = 225       # 22.5°C
     s.Hum = 450        # 45.0%
     

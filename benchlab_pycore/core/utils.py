@@ -12,26 +12,24 @@ def format_chip_temp(value: Union[int, float]) -> Optional[float]:
     """Format chip temperature value from raw sensor data.
     
     Args:
-        value (Union[int, float]): Raw temperature value from sensor (in tenths of degrees).
+        value (Union[int, float]): Raw temperature value from sensor (in degrees Celsius).
     
     Returns:
         Optional[float]: Temperature in degrees Celsius, rounded to 1 decimal place,
-                        or None if the value is outside valid temperature range.
+                         or None if the value is outside valid temperature range.
     
     Note:
-        This function converts from tenths of degrees Celsius to degrees Celsius.
-        Returns None for values outside the range -1000 to 1000 (representing
-        -100.0 deg C to 100.0 deg C).
+        The value from the microcontroller is already in degrees Celsius.
+        Returns None for values outside the range -100.0 to 100.0 deg C.
     
     Example:
-        >>> temp = format_chip_temp(420)  # 42.0 deg C
+        >>> temp = format_chip_temp(42)  # 42.0 deg C
         >>> print(f"Chip temp: {temp}°C")
         Chip temp: 42.0°C
     """
-    temp_c = value / 10
-    if temp_c > 100.0 or temp_c < -100.0:
+    if value > 100.0 or value < -100.0:
         return None
-    return round(temp_c, 1)
+    return round(value, 1)
 
 
 def format_temp(value: Union[int, float]) -> Optional[float]:
