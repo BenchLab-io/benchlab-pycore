@@ -121,8 +121,12 @@ def test_serial_connection(device_port: str) -> Optional[serial.Serial]:
         print_error(f"Serial connection error: {e}")
         return None
 
-def test_vendor_info(ser: serial.Serial) -> bool:
-    """Test reading vendor information."""
+def test_vendor_info(ser: serial.Serial) -> tuple:
+    """Test reading vendor information.
+    
+    Returns:
+        tuple: (success: bool, product_id: int)
+    """
     print_header("VENDOR INFORMATION TEST")
     
     try:
@@ -135,20 +139,25 @@ def test_vendor_info(ser: serial.Serial) -> bool:
             print_info(f"  Product ID: 0x{vendor_info['ProductId']:02X}")
             print_info(f"  Firmware Version: {vendor_info['FwVersion']}")
             
-            # Validate expected values
-            if vendor_info['VendorId'] == 0xEE and vendor_info['ProductId'] == 0x10:
-                print_success("Device identification matches BENCHLAB specifications")
-                return True
+            product_id = vendor_info['ProductId']
+            
+            # Check if it's a CFE device
+            if product_id == 0x11:
+                print_success("Device is a BENCHLAB-CFE (Product ID: 0x11)")
+                print_info("CFE-specific sensor names will be used for translation")
+            elif product_id == 0x10:
+                print_success("Device identification matches original BENCHLAB specifications")
             else:
-                print_warning("Device identification doesn't match expected BENCHLAB values")
-                return True  # Still consider it a success if we can read it
+                print_warning(f"Unknown product ID: 0x{product_id:02X}")
+            
+            return True, product_id
         else:
             print_error("Failed to read vendor information")
-            return False
+            return False, None
             
     except Exception as e:
         print_error(f"Vendor info test failed: {e}")
-        return False
+        return False, None
 
 def test_uid_reading(ser: serial.Serial) -> bool:
     """Test reading device UID."""
@@ -176,15 +185,15 @@ def test_uid_reading(ser: serial.Serial) -> bool:
         print_error(f"UID reading test failed: {e}")
         return False
 
-def test_sensor_reading(ser: serial.Serial) -> bool:
+def test_sensor_reading(ser: serial.Serial, product_id: Optional[int] = None) -> bool:
     """Test reading sensor data."""
     print_header("SENSOR READING TEST")
     
     try:
-        from benchlab_pycore.core import read_sensors, translate_sensor_struct
+        from benchlab_pycore.core import read_sensors, translate_sensor_struct, BENCHLAB_CFE_PRODUCT_ID
         
-        print_info("Reading raw sensor data...")
-        sensors = read_sensors(ser)
+        print_info(f"Reading raw sensor data (product_id={product_id})...")
+        sensors = read_sensors(ser, product_id=product_id)
         
         if sensors:
             print_success("Raw sensor data read successfully")
@@ -200,7 +209,7 @@ def test_sensor_reading(ser: serial.Serial) -> bool:
                 print_info("\n--- Key Sensor Values ---")
                 key_sensors = [
                     'SYS_Power', 'CPU_Power', 'GPU_Power', 'MB_Power',
-                    'Chip_Temp', 'Ambient_Temp', '12V_Voltage'
+                    'Chip_Temp', 'Ambient_Temp', 'ATX12V_Voltage'
                 ]
                 
                 for sensor in key_sensors:
@@ -231,13 +240,13 @@ def test_sensor_reading(ser: serial.Serial) -> bool:
                     else:
                         print_success(f"Chip temperature in reasonable range: {temp} deg C")
                 
-                if '12V_Voltage' in data:
-                    voltage = data['12V_Voltage']
+                if 'ATX12V_Voltage' in data:
+                    voltage = data['ATX12V_Voltage']
                     # 12V can be 0 when no load is connected, or in normal range 11.4-12.6V
                     if voltage == 0 or (11.4 <= voltage <= 12.6):
-                        print_success(f"12V voltage in reasonable range: {voltage}V")
+                        print_success(f"ATX12V voltage in reasonable range: {voltage}V")
                     else:
-                        print_warning(f"12V voltage seems unusual: {voltage}V")
+                        print_warning(f"ATX12V voltage seems unusual: {voltage}V")
                         # Don't fail the test for unusual voltage, just warn
                 
                 # Show all available sensors
@@ -277,14 +286,14 @@ def run_comprehensive_test() -> bool:
         return False
     
     try:
-        # Test 3: Vendor Info
-        vendor_ok = test_vendor_info(ser)
+        # Test 3: Vendor Info (also get product_id for sensor reading)
+        vendor_ok, product_id = test_vendor_info(ser)
         
         # Test 4: UID Reading
         uid_ok = test_uid_reading(ser)
         
-        # Test 5: Sensor Reading
-        sensor_ok = test_sensor_reading(ser)
+        # Test 5: Sensor Reading (pass product_id for CFE support)
+        sensor_ok = test_sensor_reading(ser, product_id=product_id)
         
         # Summary
         print_header("TEST SUMMARY")

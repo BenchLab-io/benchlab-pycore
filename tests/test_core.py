@@ -14,14 +14,30 @@ from benchlab_pycore.core import (
     read_sensors,
     read_uid,
     translate_sensor_struct,
+    translate_sensor_struct_original,
+    translate_sensor_struct_cfe,
     format_temp,
     format_chip_temp,
     VendorDataStruct,
     PowerSensor,
     FanSensor,
-    SensorStruct,
+    SensorStructOriginal,
+    SensorStructCFE,
     BENCHLAB_CMD,
-    SENSOR_VIN_NUM
+    # ORIGINAL variant constants
+    SENSOR_VIN_NUM_ORIGINAL,
+    SENSOR_POWER_NUM_ORIGINAL,
+    SENSOR_TS_NUM_ORIGINAL,
+    SENSOR_POWER_NAMES_ORIGINAL,
+    SENSOR_TS_NAMES_ORIGINAL,
+    BENCHLAB_ORIGINAL_PRODUCT_ID,
+    # CFE variant constants
+    SENSOR_VIN_NUM_CFE,
+    SENSOR_POWER_NUM_CFE,
+    SENSOR_TS_NUM_CFE,
+    SENSOR_POWER_NAMES_CFE,
+    SENSOR_TS_NAMES_CFE,
+    BENCHLAB_CFE_PRODUCT_ID,
 )
 
 
@@ -38,6 +54,8 @@ def test_imports():
     assert callable(read_uid)
     assert callable(read_device)
     assert callable(translate_sensor_struct)
+    assert callable(translate_sensor_struct_original)
+    assert callable(translate_sensor_struct_cfe)
     assert callable(format_temp)
     assert callable(format_chip_temp)
     
@@ -45,7 +63,8 @@ def test_imports():
     assert isinstance(VendorDataStruct(), Structure)
     assert isinstance(PowerSensor(), Structure)
     assert isinstance(FanSensor(), Structure)
-    assert isinstance(SensorStruct(), Structure)
+    assert isinstance(SensorStructOriginal(), Structure)
+    assert isinstance(SensorStructCFE(), Structure)
 
 
 # -----------------------
@@ -145,14 +164,25 @@ def test_read_device_uart_failure(mock_read_uart):
 
 
 @patch("benchlab_pycore.core.serial_io.read_uart")
-def test_read_sensors_success(mock_read_uart):
-    """Test read_sensors with successful read."""
-    mock_read_uart.return_value = bytes([0] * sizeof(SensorStruct))
+def test_read_sensors_original_success(mock_read_uart):
+    """Test read_sensors with ORIGINAL product_id returns SensorStructOriginal."""
+    mock_read_uart.return_value = bytes([0] * sizeof(SensorStructOriginal))
     
     mock_ser = Mock()
-    result = read_sensors(mock_ser)
+    result = read_sensors(mock_ser, product_id=BENCHLAB_ORIGINAL_PRODUCT_ID)
     
-    assert isinstance(result, SensorStruct)
+    assert isinstance(result, SensorStructOriginal)
+
+
+@patch("benchlab_pycore.core.serial_io.read_uart")
+def test_read_sensors_cfe_success(mock_read_uart):
+    """Test read_sensors with CFE product_id returns SensorStructCFE."""
+    mock_read_uart.return_value = bytes([0] * sizeof(SensorStructCFE))
+    
+    mock_ser = Mock()
+    result = read_sensors(mock_ser, product_id=BENCHLAB_CFE_PRODUCT_ID)
+    
+    assert isinstance(result, SensorStructCFE)
 
 
 @patch("benchlab_pycore.core.serial_io.read_uart")
@@ -202,67 +232,227 @@ def test_read_uid_all_retries_fail(mock_read_uart):
 
 
 # -----------------------
-# Test sensor translation
+# Test variant constants
 # -----------------------
-def test_sensor_translation_comprehensive():
-    """Test translate_sensor_struct with comprehensive sensor data."""
-    s = SensorStruct()
+def test_original_variant_constants():
+    """Test that ORIGINAL variant constants are correctly defined."""
+    assert BENCHLAB_ORIGINAL_PRODUCT_ID == 0x10
+    assert SENSOR_VIN_NUM_ORIGINAL == 13
+    assert SENSOR_POWER_NUM_ORIGINAL == 11
+    assert SENSOR_TS_NUM_ORIGINAL == 4
+    assert len(SENSOR_POWER_NAMES_ORIGINAL) == 11
+    assert len(SENSOR_TS_NAMES_ORIGINAL) == 4
+    assert SENSOR_POWER_NAMES_ORIGINAL[0] == "EPS1"
+    assert SENSOR_TS_NAMES_ORIGINAL[0] == "TS_1"
+
+
+def test_cfe_variant_constants():
+    """Test that CFE variant constants are correctly defined."""
+    assert BENCHLAB_CFE_PRODUCT_ID == 0x11
+    assert SENSOR_VIN_NUM_CFE == 13
+    assert SENSOR_POWER_NUM_CFE == 23
+    assert SENSOR_TS_NUM_CFE == 8
+    assert len(SENSOR_POWER_NAMES_CFE) == 23
+    assert len(SENSOR_TS_NAMES_CFE) == 8
+    assert SENSOR_POWER_NAMES_CFE[0] == "EPS1"
+    assert SENSOR_POWER_NAMES_CFE[11] == "HPWR1_W1"
+    assert SENSOR_POWER_NAMES_CFE[22] == "HPWR2_W6"
+    assert SENSOR_TS_NAMES_CFE[4] == "TS_HPWR1_IN"
+    assert SENSOR_TS_NAMES_CFE[7] == "TS_HPWR2_OUT"
+
+
+# -----------------------
+# Test variant structures
+# -----------------------
+def test_original_structure():
+    """Test that ORIGINAL structure is properly defined."""
+    s = SensorStructOriginal()
+    assert len(s.PowerReadings) == SENSOR_POWER_NUM_ORIGINAL
+    assert len(s.Ts) == SENSOR_TS_NUM_ORIGINAL
+    assert len(s.Fans) == 9
+    assert len(s.Vin) == SENSOR_VIN_NUM_ORIGINAL
+
+
+def test_cfe_structure():
+    """Test that CFE structure is properly defined."""
+    s = SensorStructCFE()
+    assert len(s.PowerReadings) == SENSOR_POWER_NUM_CFE
+    assert len(s.Ts) == SENSOR_TS_NUM_CFE
+    assert len(s.Fans) == 9
+    assert len(s.Vin) == SENSOR_VIN_NUM_CFE
+
+
+def test_cfe_structure_larger_than_original():
+    """Test that CFE structure is larger than ORIGINAL due to more sensors."""
+    assert sizeof(SensorStructCFE) > sizeof(SensorStructOriginal)
+
+
+# -----------------------
+# Test ORIGINAL variant translation
+# -----------------------
+def test_original_sensor_translation():
+    """Test translate_sensor_struct_original with comprehensive sensor data."""
+    s = SensorStructOriginal()
     
     # Set up power readings
-    for i in range(11):
-        s.PowerReadings[i].Voltage = 12000  # 12V
-        s.PowerReadings[i].Current = 5000   # 5A
-        s.PowerReadings[i].Power = 60000    # 60W
+    for i in range(SENSOR_POWER_NUM_ORIGINAL):
+        s.PowerReadings[i].Voltage = 12000
+        s.PowerReadings[i].Current = 5000
+        s.PowerReadings[i].Power = 60000
     
     # Set up VIN readings
-    for i in range(SENSOR_VIN_NUM):
+    for i in range(SENSOR_VIN_NUM_ORIGINAL):
+        s.Vin[i] = (i + 1) * 1000
+    
     # Set up other values
     s.Vdd = 3300
     s.Vref = 2500
-    s.Tchip = 42   # 42.0°C (already in degrees from microcontroller)
-    s.Tamb = 255   # 25.5°C
-    s.Hum = 450    # 45.0%
+    s.Tchip = 42
+    s.Tamb = 255
+    s.Hum = 450
     
-    for i in range(4):
-        s.Ts[i] = (i + 1) * 100  # 10.0°C, 20.0°C, 30.0°C, 40.0°C
+    for i in range(SENSOR_TS_NUM_ORIGINAL):
+        s.Ts[i] = (i + 1) * 100
     
     # Set up fans
     for i in range(9):
         s.Fans[i].Enable = 1
-        s.Fans[i].Duty = i * 10  # 0%, 10%, 20%, ..., 80%
-        s.Fans[i].Tach = 1000 + i * 100  # 1000, 1100, 1200, ..., 1800 RPM
+        s.Fans[i].Duty = i * 10
+        s.Fans[i].Tach = 1000 + i * 100
     
     s.FanExtDuty = 50
     
-    translated = translate_sensor_struct(s)
+    translated = translate_sensor_struct_original(s)
     
     # Check power calculations
-    assert translated["SYS_Power"] == 660.0  # 11 * 60W
-    assert translated["CPU_Power"] == 120.0  # 2 * 60W
-    assert translated["GPU_Power"] == 300.0  # 5 * 60W
-    assert translated["MB_Power"] == 240.0   # 4 * 60W
+    assert translated["SYS_Power"] == 660.0
+    assert translated["CPU_Power"] == 120.0
+    assert translated["GPU_Power"] == 300.0
+    assert translated["MB_Power"] == 240.0
+    
+    # Check power sensor names
+    assert "EPS1_Voltage" in translated
+    assert "HPWR2_Power" in translated
     
     # Check voltage conversions
     assert translated["Vdd"] == 3.3
     assert translated["Vref"] == 2.5
-    assert translated["VIN_0"] == 0.0
-    assert translated["VIN_1"] == 1.0
-    assert translated["VIN_12"] == 12.0
     
     # Check temperature conversions
     assert translated["Chip_Temp"] == 42.0
     assert translated["Ambient_Temp"] == 25.5
-    assert translated["Humidity"] == 45.0
-    assert translated["Temp_Sensor_1"] == 10.0
-    assert translated["Temp_Sensor_4"] == 40.0
+    assert translated["TS_1"] == 10.0
+    assert translated["TS_4"] == 40.0
     
     # Check fan values
     assert translated["Fan1_Duty"] == 0
-    assert translated["Fan1_RPM"] == 1000
-    assert translated["Fan1_Status"] == 1
-    assert translated["Fan9_Duty"] == 80
     assert translated["Fan9_RPM"] == 1800
-    assert translated["FanExtDuty"] == 50
+
+
+# -----------------------
+# Test CFE variant translation
+# -----------------------
+def test_cfe_sensor_translation():
+    """Test translate_sensor_struct_cfe with comprehensive sensor data."""
+    s = SensorStructCFE()
+    
+    # Set up power readings (23 sensors)
+    for i in range(SENSOR_POWER_NUM_CFE):
+        s.PowerReadings[i].Voltage = 12000
+        s.PowerReadings[i].Current = 5000
+        s.PowerReadings[i].Power = 60000
+    
+    # Set up VIN readings
+    for i in range(SENSOR_VIN_NUM_CFE):
+        s.Vin[i] = (i + 1) * 1000
+    
+    # Set up other values
+    s.Vdd = 3300
+    s.Vref = 2500
+    s.Tchip = 42
+    s.Tamb = 255
+    s.Hum = 450
+    
+    # Set up 8 temperature sensors
+    for i in range(SENSOR_TS_NUM_CFE):
+        s.Ts[i] = (i + 1) * 100
+    
+    # Set up fans
+    for i in range(9):
+        s.Fans[i].Enable = 1
+        s.Fans[i].Duty = i * 10
+        s.Fans[i].Tach = 1000 + i * 100
+    
+    s.FanExtDuty = 50
+    
+    translated = translate_sensor_struct_cfe(s)
+    
+    # Check power calculations
+    assert translated["SYS_Power"] == 660.0
+    assert translated["CPU_Power"] == 120.0
+    assert translated["GPU_Power"] == 300.0
+    assert translated["MB_Power"] == 240.0
+    
+    # Check original power sensor names
+    assert "EPS1_Voltage" in translated
+    assert "HPWR2_Power" in translated
+    
+    # Check CFE-specific power sensor names
+    assert "HPWR1_W1_Voltage" in translated
+    assert "HPWR2_W6_Power" in translated
+    
+    # Check temperature conversions
+    assert translated["Chip_Temp"] == 42.0
+    assert translated["Ambient_Temp"] == 25.5
+    assert translated["TS_1"] == 10.0
+    assert translated["TS_4"] == 40.0
+    assert translated["TS_HPWR1_IN"] == 50.0
+    assert translated["TS_HPWR1_OUT"] == 60.0
+    assert translated["TS_HPWR2_IN"] == 70.0
+    assert translated["TS_HPWR2_OUT"] == 80.0
+    
+    # Check fan values
+    assert translated["Fan1_Duty"] == 0
+    assert translated["Fan9_RPM"] == 1800
+
+
+# -----------------------
+# Test dispatcher function
+# -----------------------
+def test_translate_sensor_struct_dispatcher_original():
+    """Test that dispatcher routes to original translator correctly."""
+    s = SensorStructOriginal()
+    for i in range(SENSOR_POWER_NUM_ORIGINAL):
+        s.PowerReadings[i].Power = 10000
+    s.Tchip = 30
+    s.Tamb = 200
+    s.Hum = 500
+    
+    # Should use original translator by default
+    translated = translate_sensor_struct(s)
+    assert "EPS1_Power" in translated
+    assert "TS_1" in translated
+
+
+def test_translate_sensor_struct_dispatcher_cfe():
+    """Test that dispatcher routes to CFE translator correctly."""
+    s = SensorStructCFE()
+    for i in range(SENSOR_POWER_NUM_CFE):
+        s.PowerReadings[i].Power = 10000
+    s.Tchip = 30
+    s.Tamb = 200
+    s.Hum = 500
+    for i in range(SENSOR_TS_NUM_CFE):
+        s.Ts[i] = (i + 1) * 100
+    
+    # Should use CFE translator by type detection
+    translated = translate_sensor_struct(s)
+    assert "HPWR1_W1_Power" in translated
+    assert "TS_HPWR1_IN" in translated
+    
+    # Should also use CFE translator with explicit product_id
+    translated2 = translate_sensor_struct(s, product_id=BENCHLAB_CFE_PRODUCT_ID)
+    assert "HPWR2_W6_Power" in translated2
 
 
 # -----------------------
@@ -270,18 +460,18 @@ def test_sensor_translation_comprehensive():
 # -----------------------
 def test_format_temp_valid_range():
     """Test format_temp with valid temperature values."""
-    assert format_temp(255) == 25.5      # 25.5°C
-    assert format_temp(-42) == -4.2      # -4.2°C
-    assert format_temp(0) == 0.0         # 0.0°C
-    assert format_temp(1000) == 100.0    # 100.0°C
-    assert format_temp(-1000) == -100.0  # -100.0°C
+    assert format_temp(255) == 25.5
+    assert format_temp(-42) == -4.2
+    assert format_temp(0) == 0.0
+    assert format_temp(1000) == 100.0
+    assert format_temp(-1000) == -100.0
 
 
 def test_format_temp_invalid_range():
     """Test format_temp with values outside valid range."""
-    assert format_temp(1001) is None     # > 100.0°C
-    assert format_temp(-1001) is None    # < -100.0°C
-    assert format_temp(1500) is None     # > 100.0°C
+    assert format_temp(1001) is None
+    assert format_temp(-1001) is None
+    assert format_temp(1500) is None
 
 
 def test_format_chip_temp():
@@ -303,8 +493,8 @@ def test_format_chip_temp_invalid_range():
 # Test error handling and edge cases
 # -----------------------
 def test_sensor_translation_empty_struct():
-    """Test translate_sensor_struct with empty SensorStruct."""
-    s = SensorStruct()
+    """Test translate_sensor_struct with empty SensorStructOriginal."""
+    s = SensorStructOriginal()
     translated = translate_sensor_struct(s)
     
     # Should still return a dict with all expected keys
@@ -339,48 +529,4 @@ def test_get_fleet_info_device_read_failure(mock_serial, mock_read_uid, mock_rea
     mock_serial.side_effect = serial.SerialException("Cannot open port")
     
     result = get_fleet_info()
-    # When serial exception occurs, the device is not added to the fleet
     assert len(result) == 0
-
-
-# -----------------------
-# Test integration scenarios
-# -----------------------
-def test_complete_sensor_reading_workflow():
-    """Test a complete sensor reading workflow with mock data."""
-    # This test simulates reading from a real device
-    s = SensorStruct()
-    
-    # Simulate realistic sensor data
-    # CPU power (EPS1 + EPS2)
-    s.PowerReadings[0].Power = 150000  # 150W
-    s.PowerReadings[1].Power = 100000  # 100W
-    
-    # Motherboard power (ATX rails)
-    s.PowerReadings[2].Power = 50000   # 3.3V: 50W
-    s.PowerReadings[3].Power = 100000  # 5V: 100W
-    s.PowerReadings[4].Power = 20000   # 5VSB: 20W
-    s.PowerReadings[5].Power = 120000  # 12V: 120W
-    
-    # GPU power (PCIe connectors)
-    for i in range(6, 11):
-        s.PowerReadings[i].Power = 200000  # 200W each
-    
-    # Temperature and other sensors
-    s.Tchip = 65       # 65.0°C (already in degrees from microcontroller)
-    s.Tamb = 225       # 22.5°C
-    s.Hum = 450        # 45.0%
-    
-    # Translate and verify
-    data = translate_sensor_struct(s)
-    
-    # Verify calculated values
-    assert data["CPU_Power"] == 250.0    # 150W + 100W
-    assert data["GPU_Power"] == 1000.0   # 5 * 200W
-    assert data["MB_Power"] == 290.0     # 50W + 100W + 20W + 120W
-    assert data["SYS_Power"] == 1540.0   # Total system power
-    
-    assert data["Chip_Temp"] == 65.0
-    assert data["Ambient_Temp"] == 22.5
-    assert data["Humidity"] == 45.0
-

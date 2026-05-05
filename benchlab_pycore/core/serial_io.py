@@ -1,9 +1,13 @@
 """
-Serial communication helpers for BENCHLAB devices
+Serial communication helpers for BENCHLAB devices.
 
 This module provides functions for discovering, connecting to, and communicating
 with BENCHLAB hardware devices via serial communication. It handles device
 discovery, vendor information reading, sensor data acquisition, and UID reading.
+
+Supports multiple device variants:
+    - ORIGINAL: BENCHLAB Original (Product ID: 0x10)
+    - CFE: BENCHLAB-CFE (Product ID: 0x11)
 
 Example:
     >>> from benchlab_pycore.core import get_fleet_info, read_sensors
@@ -24,10 +28,14 @@ import serial
 import serial.tools.list_ports
 from ctypes import sizeof
 from typing import List, Dict, Optional, Union
+
 from benchlab_pycore.core.structures import (
     VendorDataStruct,
-    SensorStruct,
+    SensorStructOriginal,
+    SensorStructCFE,
     BENCHLAB_CMD,
+    BENCHLAB_ORIGINAL_PRODUCT_ID,
+    BENCHLAB_CFE_PRODUCT_ID,
 )
 
 # --- Logger setup ---
@@ -43,6 +51,7 @@ if not logger.handlers:
 
 
 # --- Serial port helpers ---
+
 def get_benchlab_ports() -> List[Dict[str, str]]:
     """Return all Benchlab COM ports without opening them.
     
@@ -188,6 +197,7 @@ def open_serial_connection(port: Optional[str] = None) -> Optional[serial.Serial
 
 
 # --- UART helpers ---
+
 def read_uart(ser: serial.Serial, cmd: BENCHLAB_CMD, size: int) -> Optional[bytes]:
     """Send a command and read bytes from the device.
     
@@ -258,36 +268,56 @@ def read_device(ser: serial.Serial) -> Optional[Dict[str, int]]:
         return None
 
 
-def read_sensors(ser: serial.Serial) -> Optional[SensorStruct]:
+def read_sensors(
+    ser: serial.Serial, 
+    product_id: Optional[int] = None
+) -> Optional[Union[SensorStructOriginal, SensorStructCFE]]:
     """Read all sensors from the device.
     
     Args:
         ser (serial.Serial): Opened serial connection to the device.
+        product_id (Optional[int]): Product ID to determine which sensor structure 
+                                    to use. Use BENCHLAB_CFE_PRODUCT_ID for CFE devices,
+                                    or BENCHLAB_ORIGINAL_PRODUCT_ID (or None) for original.
     
     Returns:
-        Optional[SensorStruct]: SensorStruct object containing all sensor data,
-                               or None if read failed.
+        Optional[Union[SensorStructOriginal, SensorStructCFE]]: Sensor structure object 
+            containing all sensor data, or None if read failed.
+            - Returns SensorStructCFE for CFE devices (product_id=0x11)
+            - Returns SensorStructOriginal for original devices (default)
     
     Note:
-        The returned SensorStruct contains raw sensor values. Use translate_sensor_struct()
+        The returned sensor structure contains raw sensor values. Use translate_sensor_struct()
         to convert to human-readable format.
     
     Example:
         >>> ser = serial.Serial('COM3', 115200)
-        >>> sensors = read_sensors(ser)
+        >>> # For CFE device
+        >>> sensors = read_sensors(ser, product_id=0x11)
         >>> if sensors:
         >>>     # Access raw sensor data
         >>>     voltage = sensors.Vin[0]
     """
-    buffer = read_uart(
-        ser,
-        BENCHLAB_CMD.UART_CMD_READ_SENSORS,
-        sizeof(SensorStruct)
-    )
-    if buffer is None:
-        logger.warning("Failed to read sensors from device")
-        return None
-    return SensorStruct.from_buffer_copy(buffer)
+    if product_id == BENCHLAB_CFE_PRODUCT_ID:
+        buffer = read_uart(
+            ser,
+            BENCHLAB_CMD.UART_CMD_READ_SENSORS,
+            sizeof(SensorStructCFE)
+        )
+        if buffer is None:
+            logger.warning("Failed to read sensors from BENCHLAB-CFE device")
+            return None
+        return SensorStructCFE.from_buffer_copy(buffer)
+    else:
+        buffer = read_uart(
+            ser,
+            BENCHLAB_CMD.UART_CMD_READ_SENSORS,
+            sizeof(SensorStructOriginal)
+        )
+        if buffer is None:
+            logger.warning("Failed to read sensors from device")
+            return None
+        return SensorStructOriginal.from_buffer_copy(buffer)
 
 
 def read_uid(ser: serial.Serial, retries: int = 3, delay: float = 0.2) -> Optional[str]:
