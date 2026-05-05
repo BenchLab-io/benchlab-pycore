@@ -44,7 +44,7 @@ if devices:
         # Access sensor values
         print(f"CPU Power: {data['CPU_Power']}W")
         print(f"Chip Temperature: {data['Chip_Temp']} deg C")
-        print(f"12V Voltage: {data['12V_Voltage']}V")
+        print(f"ATX12V Voltage: {data['ATX12V_Voltage']}V")
     
     ser.close()
 ```
@@ -145,21 +145,32 @@ The `translate_sensor_struct()` function returns a dictionary with the following
 
 #### Voltage Measurements
 - `EPS1_Voltage`, `EPS2_Voltage`: EPS power supply voltages (V)
-- `12V_Voltage`, `5V_Voltage`, `5VSB_Voltage`, `3.3V_Voltage`: ATX voltages (V)
-- `PCIE8_1_Voltage` through `HPWR2_Voltage`: PCIe and power connector voltages (V)
+- `ATX12V_Voltage`, `ATX5V_Voltage`, `ATX5VSB_Voltage`, `ATX3V_Voltage`: ATX voltages (V)
+- `PCIE1_Voltage`, `PCIE2_Voltage`, `PCIE3_Voltage`: PCIe connector voltages (V)
+- `HPWR1_Voltage`, `HPWR2_Voltage`: High-power connector voltages (V)
+- `HPWR1_W1_Voltage` through `HPWR2_W6_Voltage`: CFE variant extended power rail voltages (V)
 - `VIN_0` through `VIN_12`: Additional voltage inputs (V)
 - `Vdd`, `Vref`: Reference voltages (V)
 
 #### Current Measurements
-- `EPS1_Current` through `HPWR2_Current`: Current measurements (A)
+- `EPS1_Current`, `EPS2_Current`: EPS current (A)
+- `ATX3V_Current`, `ATX5V_Current`, `ATX5VSB_Current`, `ATX12V_Current`: ATX currents (A)
+- `PCIE1_Current`, `PCIE2_Current`, `PCIE3_Current`: PCIe currents (A)
+- `HPWR1_Current`, `HPWR2_Current`: High-power connector currents (A)
+- `HPWR1_W1_Current` through `HPWR2_W6_Current`: CFE variant extended current measurements (A)
 
 #### Power Measurements (per rail)
-- `EPS1_Power` through `HPWR2_Power`: Power per rail (W)
+- `EPS1_Power`, `EPS2_Power`: EPS power (W)
+- `ATX3V_Power`, `ATX5V_Power`, `ATX5VSB_Power`, `ATX12V_Power`: ATX power (W)
+- `PCIE1_Power`, `PCIE2_Power`, `PCIE3_Power`: PCIe power (W)
+- `HPWR1_Power`, `HPWR2_Power`: High-power connector power (W)
+- `HPWR1_W1_Power` through `HPWR2_W6_Power`: CFE variant extended power measurements (W)
 
 #### Temperature Measurements
 - `Chip_Temp`: Chip temperature (deg C)
 - `Ambient_Temp`: Ambient temperature (deg C)
-- `Temp_Sensor_1` through `Temp_Sensor_4`: Additional temperature sensors (deg C)
+- `TS_1` through `TS_4`: Temperature sensors 1-4 (deg C)
+- `TS_HPWR1_IN`, `TS_HPWR1_OUT`, `TS_HPWR2_IN`, `TS_HPWR2_OUT`: CFE variant HPWR temperature sensors (deg C)
 - `Humidity`: Relative humidity (%)
 
 #### Fan Measurements
@@ -361,26 +372,26 @@ Testing benchlab-pycore library with physical hardware
   MB_Power: 30.5
   Chip_Temp: 65.0
   Ambient_Temp: 22.5
-  12V_Voltage: 12.05
+  ATX12V_Voltage: 12.05
 
 --- Data Validation ---
 ✅ System power in reasonable range: 250.5W
 ✅ Chip temperature in reasonable range: 65.0 deg C
-✅ 12V voltage in reasonable range: 12.05V
+✅ ATX12V voltage in reasonable range: 12.05V
 
 --- All Available Sensors (45 total) ---
-  12V_Current: 10.5
-  12V_Power: 126.6
-  12V_Voltage: 12.05
-  3.3V_Current: 2.1
-  3.3V_Power: 6.9
-  3.3V_Voltage: 3.3
-  5V_Current: 4.2
-  5V_Power: 21.0
-  5V_Voltage: 5.0
-  5VSB_Current: 0.8
-  5VSB_Power: 4.0
-  5VSB_Voltage: 5.0
+  ATX12V_Current: 10.5
+  ATX12V_Power: 126.6
+  ATX12V_Voltage: 12.05
+  ATX3V_Current: 2.1
+  ATX3V_Power: 6.9
+  ATX3V_Voltage: 3.3
+  ATX5V_Current: 4.2
+  ATX5V_Power: 21.0
+  ATX5V_Voltage: 5.0
+  ATX5VSB_Current: 0.8
+  ATX5VSB_Power: 4.0
+  ATX5VSB_Voltage: 5.0
   EPS1_Current: 10.0
   EPS1_Power: 120.0
   EPS1_Voltage: 12.0
@@ -418,10 +429,10 @@ Testing benchlab-pycore library with physical hardware
   Humidity: 45.0
   MB_Power: 30.5
   SYS_Power: 250.5
-  Temp_Sensor_1: 25.0
-  Temp_Sensor_2: 26.0
-  Temp_Sensor_3: 27.0
-  Temp_Sensor_4: 28.0
+  TS_1: 25.0
+  TS_2: 26.0
+  TS_3: 27.0
+  TS_4: 28.0
   Vdd: 3.3
   Vref: 2.5
   VIN_0: 0.0
@@ -467,8 +478,8 @@ The device test includes detailed logging of sensor readings with timestamps for
 2026-03-23 09:46:37,794 [INFO] SENSOR_READING: Chip_Temp = 36.0
   Ambient_Temp: 26.3
 2026-03-23 09:46:37,794 [INFO] SENSOR_READING: Ambient_Temp = 26.3
-  12V_Voltage: 0.0
-2026-03-23 09:46:37,794 [INFO] SENSOR_READING: 12V_Voltage = 0.0
+  ATX12V_Voltage: 0.0
+2026-03-23 09:46:37,794 [INFO] SENSOR_READING: ATX12V_Voltage = 0.0
 ```
 
 **TroubleshootingIf tests fail, common issues include:
