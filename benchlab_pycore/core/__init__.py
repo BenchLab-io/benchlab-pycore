@@ -14,6 +14,21 @@ from .sensor_translation import (
     translate_sensor_struct_original,
     translate_sensor_struct_cfe,
 )
+from .config_io import (
+    ping,
+    read_name,
+    write_name,
+    read_fan_profile,
+    write_fan_profile,
+    read_rgb_profile,
+    write_rgb_profile,
+    read_calibration,
+    write_calibration_chunk,
+    write_calibration,
+    load_calibration,
+    store_calibration,
+    send_action,
+)
 from .structures import (
     # Shared structures
     VendorDataStruct,
@@ -23,6 +38,25 @@ from .structures import (
     # Shared constants
     BENCHLAB_VENDOR_ID,
     FAN_NUM,
+    # Config structures
+    FanConfigStruct,
+    FanMode,
+    TempSrc,
+    FanStop,
+    RGBConfigStruct,
+    RGBMode,
+    RGBDirection,
+    CalibrationValueStruct,
+    CalibrationStruct,
+    CalibrationStructCFE,
+    # Config constants
+    FAN_PROFILE_NUM,
+    RGB_PROFILE_NUM,
+    CAL_NUM,
+    CAL_FACTORY,
+    CAL_USER,
+    FRIENDLY_NAME_LEN,
+    FAN_CURVE_POINTS,
     # ORIGINAL variant
     SensorStructOriginal,
     BENCHLAB_ORIGINAL_PRODUCT_ID,
@@ -57,6 +91,20 @@ __all__ = [
     "translate_sensor_struct",
     "translate_sensor_struct_original",
     "translate_sensor_struct_cfe",
+    # config_io
+    "ping",
+    "read_name",
+    "write_name",
+    "read_fan_profile",
+    "write_fan_profile",
+    "read_rgb_profile",
+    "write_rgb_profile",
+    "read_calibration",
+    "write_calibration_chunk",
+    "write_calibration",
+    "load_calibration",
+    "store_calibration",
+    "send_action",
     # Shared structures
     "VendorDataStruct",
     "PowerSensor",
@@ -65,6 +113,25 @@ __all__ = [
     # Shared constants
     "BENCHLAB_VENDOR_ID",
     "FAN_NUM",
+    # Config structures
+    "FanConfigStruct",
+    "FanMode",
+    "TempSrc",
+    "FanStop",
+    "RGBConfigStruct",
+    "RGBMode",
+    "RGBDirection",
+    "CalibrationValueStruct",
+    "CalibrationStruct",
+    "CalibrationStructCFE",
+    # Config constants
+    "FAN_PROFILE_NUM",
+    "RGB_PROFILE_NUM",
+    "CAL_NUM",
+    "CAL_FACTORY",
+    "CAL_USER",
+    "FRIENDLY_NAME_LEN",
+    "FAN_CURVE_POINTS",
     # ORIGINAL variant
     "SensorStructOriginal",
     "BENCHLAB_ORIGINAL_PRODUCT_ID",

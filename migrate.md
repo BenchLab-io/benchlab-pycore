@@ -1,245 +1,103 @@
-# Migration Guide to benchlab-pycore v0.3.0
+# Migration Guide to benchlab-pycore v0.4.0
 
-This guide explains how to migrate your tools and applications to use benchlab-pycore v0.3.0. Version 0.3.0 introduces multi-variant device support, allowing the library to work with both the original BENCHLAB device and the extended BENCHLAB-CFE device.
+This guide covers breaking changes and new features introduced in each version.
 
-## What's New in v0.3.0
+---
 
-### Multi-Variant Device Support
+## Migrating to v0.4.0
 
-v0.3.0 adds support for two BENCHLAB device variants:
+v0.4.0 adds full device configuration support — fan profiles, RGB profiles, calibration, and config persistence — along with struct corrections derived from the firmware headers of both ORIGINAL and CFE devices.
 
-| Variant | Product ID | Description |
-|---------|------------|-------------|
-| **ORIGINAL** | `0x10` | Original BENCHLAB device with 11 power sensors, 4 temperature sensors |
-| **CFE** | `0x11` | Extended BENCHLAB-CFE device with 23 power sensors, 8 temperature sensors |
+### New in v0.4.0
 
-### New Structures and Constants
+#### Full configuration API
 
-The following new structures and constants are now available:
+All firmware configuration commands now have Python functions:
 
 ```python
 from benchlab_pycore.core import (
-    # CFE Variant Structures
-    SensorStructCFE,
-    BENCHLAB_CFE_PRODUCT_ID,
-    BENCHLAB_CFE_FIRMWARE_VERSION,
-    SENSOR_VIN_NUM_CFE,
-    SENSOR_POWER_NUM_CFE,
-    SENSOR_TS_NUM_CFE,
-    SENSOR_POWER_NAMES_CFE,
-    SENSOR_TS_NAMES_CFE,
-    
-    # ORIGINAL Variant (renamed for clarity)
-    SensorStructOriginal,
-    BENCHLAB_ORIGINAL_PRODUCT_ID,
-    BENCHLAB_ORIGINAL_FIRMWARE_VERSION,
-    SENSOR_VIN_NUM_ORIGINAL,
-    SENSOR_POWER_NUM_ORIGINAL,
-    SENSOR_TS_NUM_ORIGINAL,
-    SENSOR_POWER_NAMES_ORIGINAL,
-    SENSOR_TS_NAMES_ORIGINAL,
+    ping,
+    read_name, write_name,
+    read_fan_profile, write_fan_profile,
+    read_rgb_profile, write_rgb_profile,
+    read_calibration, write_calibration, write_calibration_chunk,
+    load_calibration, store_calibration,
+    send_action,
 )
 ```
 
-### Updated Translation Function
-
-The `translate_sensor_struct()` function now automatically detects the device variant:
+#### Enums for all configuration fields
 
 ```python
-from benchlab_pycore.core import read_sensors, translate_sensor_struct
-
-# Automatically detects ORIGINAL or CFE variant
-sensors = read_sensors(ser)
-if sensors:
-    data = translate_sensor_struct(sensors)  # Works with both variants
+from benchlab_pycore.core import (
+    FanMode,       # TEMP_CONTROL=0, FIXED=1, EXT=2
+    TempSrc,       # AUTO=0, TS1=1, TS2=2, TS3=3, TS4=4, TAMB=5
+    FanStop,       # OFF=0, ON=1
+    RGBMode,       # RAINBOW_CYCLE=0 … SINGLE_COLOR=9
+    RGBDirection,  # CLOCKWISE=0, COUNTER_CLOCKWISE=1
+)
 ```
 
-You can also explicitly specify the product ID:
+#### CalibrationStruct for both variants
 
 ```python
-data = translate_sensor_struct(sensors, product_id=0x11)  # Force CFE translation
+from benchlab_pycore.core import CalibrationStruct, CalibrationStructCFE, CalibrationValueStruct
 ```
 
-## Breaking Changes
+#### Interactive configuration tool
 
-### Structure Naming
-
-If you were directly referencing `SensorStruct`, it has been renamed to `SensorStructOriginal` for clarity:
-
-**Before (v0.2.x):**
-```python
-from benchlab_pycore.core import SensorStruct
-```
-
-**After (v0.3.0):**
-```python
-from benchlab_pycore.core import SensorStructOriginal
-# Or use the generic translate_sensor_struct() which handles both
-```
-
-### Module Exports
-
-The `__init__.py` now exports variant-specific constants and structures. Update your imports if you were relying on internal module paths.
-
-## Migration Steps
-
-### Step 1: Update Dependencies
-
-Update your project to use benchlab-pycore v0.3.0:
+`tests/test_deviceConfig.py` provides a numbered-menu interactive tool for reading and writing all configuration on a live device. All write operations require explicit confirmation.
 
 ```bash
-pip install --upgrade benchlab-pycore
+python tests/test_deviceConfig.py          # auto-detects device
+python tests/test_deviceConfig.py COM4     # explicit port
 ```
 
-Or add to your `requirements.txt`:
-```
-benchlab-pycore>=0.3.0
+#### Safer hardware test script
+
+`tests/test_device.py` now runs read-only tests by default. Write tests require `--destructive` and prompt for confirmation before each write.
+
+```bash
+python tests/test_device.py                # safe, read-only
+python tests/test_device.py --destructive  # write tests with confirmation prompts
 ```
 
-### Step 2: Update Direct Structure References
+---
 
-If your code directly references `SensorStruct`, update it to use `SensorStructOriginal`:
+## Migrating to v0.3.0
+
+v0.3.0 added multi-variant device support for ORIGINAL and CFE devices.
+
+### Breaking Changes
+
+#### SensorStruct renamed to SensorStructOriginal
 
 ```python
-# Old
+# Before
 from benchlab_pycore.core import SensorStruct
-if isinstance(data, SensorStruct):
-    # ...
 
-# New
+# After
 from benchlab_pycore.core import SensorStructOriginal
-if isinstance(data, SensorStructOriginal):
-    # ...
 ```
 
-### Step 3: Use the Dispatcher Function
+### New in v0.3.0
 
-Instead of calling variant-specific translation functions, use the main `translate_sensor_struct()` which auto-detects the variant:
+- `SensorStructCFE` for CFE devices (23 power sensors, 8 temperature sensors)
+- `translate_sensor_struct()` auto-detects variant from struct type or `product_id`
+- `read_sensors(ser, product_id=...)` selects the correct struct for the connected device
+- Variant-specific constants: `BENCHLAB_CFE_PRODUCT_ID`, `SENSOR_POWER_NUM_CFE`, etc.
 
-```python
-# Old (v0.2.x)
-from benchlab_pycore.core import translate_sensor_struct
-data = translate_sensor_struct(sensors)
+---
 
-# New (v0.3.0) - same API, but now supports both variants automatically
-from benchlab_pycore.core import translate_sensor_struct
-data = translate_sensor_struct(sensors)  # Auto-detects ORIGINAL or CFE
-```
+## Full Changelog Summary
 
-### Step 4: Handle New Sensor Fields (CFE devices)
-
-If you're working with CFE devices, your code may need to handle additional sensor fields:
-
-**Additional Power Sensors (CFE only):**
-- `HPWR1_W1` through `HPWR1_W6`
-- `HPWR2_W1` through `HPWR2_W6`
-
-**Additional Temperature Sensors (CFE only):**
-- `TS_HPWR1_IN`, `TS_HPWR1_OUT`
-- `TS_HPWR2_IN`, `TS_HPWR2_OUT`
-
-Example of handling variant-specific sensors:
-
-```python
-from benchlab_pycore.core import read_device, read_sensors, translate_sensor_struct, BENCHLAB_CFE_PRODUCT_ID
-
-# Read device info to determine variant
-device_info = read_device(ser)
-if device_info and device_info['ProductId'] == BENCHLAB_CFE_PRODUCT_ID:
-    print("CFE device detected - additional sensors available")
-    
-sensors = read_sensors(ser)
-data = translate_sensor_struct(sensors)
-
-# Access sensors that exist on all variants
-print(f"CPU Power: {data['CPU_Power']}W")
-
-# Access CFE-specific sensors (check if they exist)
-if 'HPWR1_W1_Voltage' in data:
-    print(f"CFE extended power sensor available")
-```
-
-### Step 5: Update Type Hints
-
-If you use type hints, update them to accept both variant types:
-
-```python
-from typing import Union
-from benchlab_pycore.core import SensorStructOriginal, SensorStructCFE
-
-def process_sensors(sensors: Union[SensorStructOriginal, SensorStructCFE]) -> dict:
-    # ...
-```
-
-## Code Examples
-
-### Basic Usage (Both Variants)
-
-```python
-import serial
-from benchlab_pycore.core import get_fleet_info, read_sensors, translate_sensor_struct
-
-# Discover devices
-devices = get_fleet_info()
-for device in devices:
-    ser = serial.Serial(device['port'], 115200, timeout=1)
-    
-    # Read and translate sensors (auto-detects variant)
-    sensors = read_sensors(ser)
-    if sensors:
-        data = translate_sensor_struct(sensors)
-        
-        # Common sensors available on all variants
-        print(f"System Power: {data['SYS_Power']}W")
-        print(f"Chip Temp: {data['Chip_Temp']}°C")
-        
-    ser.close()
-```
-
-### Variant-Specific Handling
-
-```python
-from benchlab_pycore.core import (
-    read_device, read_sensors, translate_sensor_struct,
-    BENCHLAB_ORIGINAL_PRODUCT_ID, BENCHLAB_CFE_PRODUCT_ID
-)
-
-def read_all_sensor_data(ser):
-    """Read sensor data with variant awareness."""
-    device_info = read_device(ser)
-    if not device_info:
-        return None, None
-    
-    product_id = device_info['ProductId']
-    variant = "ORIGINAL" if product_id == BENCHLAB_ORIGINAL_PRODUCT_ID else "CFE"
-    
-    sensors = read_sensors(ser)
-    data = translate_sensor_struct(sensors, product_id=product_id)
-    
-    return variant, data
-
-# Usage
-variant, data = read_all_sensor_data(ser)
-print(f"Device variant: {variant}")
-print(f"Available sensors: {list(data.keys())}")
-```
-
-## FAQ
-
-**Q: Will my existing code still work?**  
-A: Yes, the `translate_sensor_struct()` function maintains backward compatibility. If you were using it with ORIGINAL devices, it will continue to work.
-
-**Q: How do I know which variant I have?**  
-A: Use `read_device()` to get the product ID, or check the `ProductId` field in the returned dictionary.
-
-**Q: Can I still access raw sensor structures?**  
-A: Yes, `read_sensors()` returns the appropriate structure type (`SensorStructOriginal` or `SensorStructCFE`) based on the connected device.
-
-**Q: What if I need to support only one variant?**  
-A: You can still use the same API. The library will auto-detect the variant and handle it appropriately.
+| Version | Key Changes |
+|---------|-------------|
+| v0.4.0 | Full config API; corrected FanConfigStruct, RGBConfigStruct, CalibrationStruct; enums; interactive tool; safer test script |
+| v0.3.0 | CFE multi-variant support; SensorStructOriginal / SensorStructCFE; translate dispatcher |
 
 ## Support
 
-For issues or questions, please refer to:
+For issues or questions:
 - [GitHub Issues](https://github.com/BenchLab-io/benchlab-pycore/issues)
 - [BENCHLAB Documentation](https://benchlab.io/docs)

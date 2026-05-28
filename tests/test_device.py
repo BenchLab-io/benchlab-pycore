@@ -15,10 +15,9 @@ Requirements:
 """
 
 import sys
-import time
 import serial
 import logging
-from typing import List, Dict, Optional, Any
+from typing import List, Dict, Optional
 
 # Set up logger for sensor readings
 logger = logging.getLogger("test_device")
@@ -84,7 +83,7 @@ def test_device_discovery() -> List[Dict[str, str]]:
         for device in devices:
             print_info(f"  - Port: {device['port']}")
             print_info(f"    UID: {device['uid']}")
-            print_info(f"    Firmware: {device['fw']}")
+            print_info(f"    Firmware: {device['firmware']}")
     except Exception as e:
         print_error(f"Device discovery failed: {e}")
         return []
@@ -190,7 +189,7 @@ def test_sensor_reading(ser: serial.Serial, product_id: Optional[int] = None) ->
     print_header("SENSOR READING TEST")
     
     try:
-        from benchlab_pycore.core import read_sensors, translate_sensor_struct, BENCHLAB_CFE_PRODUCT_ID
+        from benchlab_pycore.core import read_sensors, translate_sensor_struct
         
         print_info(f"Reading raw sensor data (product_id={product_id})...")
         sensors = read_sensors(ser, product_id=product_id)
