@@ -199,8 +199,10 @@ def read_name(ser: serial.Serial) -> Optional[str]:
     if data is None:
         logger.warning("read_name: failed to read name")
         return None
-    # Strip null terminator and trailing nulls
-    return data.rstrip(b"\x00").decode("utf-8", errors="replace")
+    # Take only the part before the first null terminator
+    # (rstrip only removes trailing nulls, not embedded ones)
+    name_bytes = data.split(b"\x00", 1)[0]
+    return name_bytes.decode("utf-8", errors="replace")
 
 
 def write_name(ser: serial.Serial, name: str) -> bool:
@@ -229,11 +231,12 @@ def write_name(ser: serial.Serial, name: str) -> bool:
         >>> write_name(ser, "My BENCHLAB")
         True
     """
-    # Cap at FRIENDLY_NAME_LEN - 2 so that total packet (cmd + payload) is at
-    # most FRIENDLY_NAME_LEN - 1 bytes, safely within the firmware's memcpy.
-    max_name_bytes = FRIENDLY_NAME_LEN - 1  # 31 bytes; keeps total packet at FRIENDLY_NAME_LEN
+    # Cap at FRIENDLY_NAME_LEN - 2 to leave room for cmd byte and null terminator
+    # Total packet: [cmd(1)] + [name bytes] + [null(1)] <= FRIENDLY_NAME_LEN
+    max_name_bytes = FRIENDLY_NAME_LEN - 2  # 30 bytes for name + 1 for null + 1 for cmd = 32
     encoded = name.encode("utf-8")[:max_name_bytes]
-    payload = bytes([BENCHLAB_CMD.UART_CMD_WRITE_NAME]) + encoded
+    # Add null terminator so firmware knows where the name ends
+    payload = bytes([BENCHLAB_CMD.UART_CMD_WRITE_NAME]) + encoded + b'\x00'
     ok = _write(ser, payload)
     if ok:
         logger.info("write_name: wrote %r", name)
@@ -326,7 +329,7 @@ def write_fan_profile(
     if ok:
         logger.info(
             "write_fan_profile: profile=%d fan=%d mode=%d duty=%d",
-            fan_profile, fan_id, config.Mode, config.FixedDuty,
+            fan_profile, fan_id, config.FanMode, config.FixedDuty,
         )
     return ok
 

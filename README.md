@@ -403,10 +403,14 @@ python -m pytest tests/ -v
 python tests/test_device.py
 ```
 
-**Hardware tests with write operations (requires confirmation for each write):**
+**Automated write validation tests (v0.4.1):**
 ```bash
-python tests/test_device.py --destructive
+python tests/test_write_validation.py                    # safe default tests
+python tests/test_write_validation.py --dry-run          # preview without writing
+python tests/test_write_validation.py --test-calibration # include calibration tests
 ```
+
+See [tests/WRITE_TESTING.md](tests/WRITE_TESTING.md) for comprehensive write testing documentation.
 
 **Interactive configuration tool:**
 ```bash
