@@ -221,7 +221,7 @@ def write_name(ser: serial.Serial, name: str) -> bool:
 
     Args:
         ser:  Open serial connection to the device.
-        name: New friendly name (max 31 UTF-8 bytes; truncated if longer).
+        name: New friendly name (max 30 UTF-8 bytes; truncated if longer).
 
     Returns:
         True if the bytes were sent successfully (no ACK from firmware).
@@ -234,7 +234,10 @@ def write_name(ser: serial.Serial, name: str) -> bool:
     # Cap at FRIENDLY_NAME_LEN - 2 to leave room for cmd byte and null terminator
     # Total packet: [cmd(1)] + [name bytes] + [null(1)] <= FRIENDLY_NAME_LEN
     max_name_bytes = FRIENDLY_NAME_LEN - 2  # 30 bytes for name + 1 for null + 1 for cmd = 32
-    encoded = name.encode("utf-8")[:max_name_bytes]
+    encoded = name.encode("utf-8")
+    while len(encoded) > max_name_bytes:
+        name = name[:-1]
+        encoded = name.encode("utf-8")
     # Add null terminator so firmware knows where the name ends
     payload = bytes([BENCHLAB_CMD.UART_CMD_WRITE_NAME]) + encoded + b'\x00'
     ok = _write(ser, payload)

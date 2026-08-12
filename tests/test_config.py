@@ -208,12 +208,12 @@ def test_read_name_uart_failure(mock_read_uart):
 def test_write_name_success():
     """write_name() sends cmd byte + encoded name."""
     mock_ser = Mock()
-    mock_ser.write.return_value = 12   # len("My BENCHLAB") + 1 cmd byte
+    mock_ser.write.return_value = 13   # len("My BENCHLAB") + 1 cmd byte + 1 null
     result = write_name(mock_ser, "My BENCHLAB")
     assert result is True
     sent = mock_ser.write.call_args[0][0]
     assert sent[0] == BENCHLAB_CMD.UART_CMD_WRITE_NAME
-    assert sent[1:] == b"My BENCHLAB"
+    assert sent[1:] == b"My BENCHLAB\x00"
 
 
 def test_write_name_truncates_long_name():
