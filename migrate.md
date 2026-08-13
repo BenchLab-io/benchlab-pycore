@@ -1,6 +1,52 @@
-# Migration Guide to benchlab-pycore v0.5.0
+# Migration Guide to benchlab-pycore v0.5.1
 
 This guide covers breaking changes and new features introduced in each version.
+
+---
+
+## Migrating to v0.5.1
+
+v0.5.1 is a non-breaking release. No code changes are required to upgrade.
+
+### New in v0.5.1
+
+#### Device config / NVM / reset commands
+
+Added Python wrappers for six previously-unavailable UART commands, matching
+the protocol implemented in the BenchLab BL_Service (C#) reference:
+
+```python
+from benchlab_pycore.core.config_io import (
+    read_config, write_config,
+    save_config, load_config, reset_config,
+    set_fan_duty,
+    reset_device,
+)
+```
+
+**Note:** as of this release, none of these six commands are implemented in
+any currently shipping or in-development BENCHLAB firmware build. Calling
+them against real hardware will fail (no response) until firmware support
+lands. They are included now for forward compatibility with the intended
+protocol.
+
+#### Sensor sentinel handling fix
+
+`translate_sensor_struct_original()` / `translate_sensor_struct_bl2()` now
+return `None` for VIN and `FanExtDuty` readings when the firmware reports
+its "sensor not populated" sentinel value (`0x7FFF` for VIN, `255` for
+`FanExtDuty`), instead of passing the sentinel through as a literal value:
+
+```python
+# Before: a disabled VIN channel could report a nonsensical 32.767 V
+# After:  a disabled VIN channel reports None
+
+# Before: FanExtDuty could report 255 as if it were a real duty percentage
+# After:  FanExtDuty reports None when the MCU has embedded control
+```
+
+`format_temp()` / `format_chip_temp()` also now check the `0x7FFF` sentinel
+explicitly rather than relying on the incidental range-check fallback.
 
 ---
 
