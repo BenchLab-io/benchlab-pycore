@@ -174,10 +174,10 @@ ser.close()
   Sends the welcome command and verifies the device responds correctly.
 
 - **`read_name(ser)`** → `Optional[str]`
-  Reads the device friendly name (up to 31 characters).
+  Reads the device friendly name (up to 30 UTF-8 bytes).
 
 - **`write_name(ser, name)`** → `bool`
-  Writes a new friendly name. Truncated to 31 characters if longer.
+  Writes a new friendly name. Raises `ValueError` if *name* encodes to more than 30 UTF-8 bytes.
 
 ### Configuration — Fan Profiles
 
@@ -403,7 +403,7 @@ python -m pytest tests/ -v
 python tests/test_device.py
 ```
 
-**Automated write validation tests (v0.4.1):**
+**Automated write validation tests (added in v0.4.1):**
 ```bash
 python tests/test_write_validation.py                    # safe default tests
 python tests/test_write_validation.py --dry-run          # preview without writing
