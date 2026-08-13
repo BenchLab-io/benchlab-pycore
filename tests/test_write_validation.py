@@ -44,6 +44,11 @@ import argparse
 from typing import Optional, Dict, Any, Tuple
 from dataclasses import dataclass, asdict
 
+# Ensure box-drawing/checkmark characters print correctly on Windows consoles
+# whose default codepage (e.g. cp1252) can't encode them.
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8")
+
 # =============================================================================
 # Output Formatting
 # =============================================================================

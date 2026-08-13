@@ -83,7 +83,7 @@ def test_device_discovery() -> List[Dict[str, str]]:
         for device in devices:
             print_info(f"  - Port: {device['port']}")
             print_info(f"    UID: {device['uid']}")
-            print_info(f"    Firmware: {device['firmware']}")
+            print_info(f"    Firmware: {device['fw']}")
     except Exception as e:
         print_error(f"Device discovery failed: {e}")
         return []
