@@ -147,9 +147,22 @@ class BENCHLAB_CMD(IntEnum):
     UART_CMD_STORE_CALIBRATION= 12
     UART_CMD_READ_UID         = 13
     UART_CMD_READ_VENDOR_DATA = 14
+    UART_CMD_READ_CONFIG      = 15
+    UART_CMD_WRITE_CONFIG     = 16
+    UART_CMD_NVM_CONFIG       = 17
+    UART_CMD_WRITE_FAN_DUTY   = 18
+    UART_CMD_RESET            = 19
+    UART_CMD_BOOTLOADER       = 20
 
     def toByte(self):
         return self.value.to_bytes(1, 'little')
+
+
+class BenchlabNvmCmd(IntEnum):
+    """NVM sub-command — UART_NVM_CMD enum in usbd_cdc_if.c."""
+    CONFIG_SAVE  = 0
+    CONFIG_LOAD  = 1
+    CONFIG_RESET = 2
 
 
 # =============================================================================
@@ -272,6 +285,46 @@ class RGBConfigStruct(Structure):
 
 
 # =============================================================================
+# Device Configuration — DeviceConfigStruct in benchlab.h
+# =============================================================================
+
+class DeviceConfigStruct(Structure):
+    """Full device config blob — DeviceConfigStruct in benchlab.h.
+
+    Field layout confirmed directly against the actual firmware source
+    (BenchLab-io/BENCHLAB-FW, benchlab.h, cfe branch):
+    ``Version + Crc + FriendlyName[32] + FanProfile[27] + RGBConfig[2]``.
+    426 bytes (not the C# service's hardcoded 220) is believed to be the
+    true wire size — ``FanConfigStruct`` (14 bytes) and ``RGBConfigStruct``
+    (6 bytes), the two nested types, were both confirmed byte-for-byte
+    against real hardware responses to UART_CMD_READ_FAN_PROFILE and
+    UART_CMD_READ_RGB.
+
+    NOTE: as of the firmware repo's current master and cfe branches,
+    UART_CMD_READ_CONFIG (and the other five commands 15-20) are NOT
+    implemented in firmware at all — the dispatcher's switch statement
+    (usbd_cdc_if.c / command.c) only handles commands 0-14, and the
+    UART_CMD/COMMAND_ID enum itself stops at READ_VENDOR_DATA (14).
+    Confirmed by direct probing against a real device: commands 15-20
+    return zero bytes. The C# service's Device_BenchLab.cs implements
+    GetConfigItems/SetConfigItems/etc. speculatively for commands that
+    don't exist on any current firmware build, and its own
+    ``SendCommand(txBuffer, out rxBuffer, 220)`` call would be wrong
+    regardless (undersized vs. the true ~426-byte struct) if firmware ever
+    does implement this. This struct's *field layout* is solid (verified
+    against firmware source + hardware); its associated *command* is not
+    yet usable against any real device.
+    """
+    _fields_ = [
+        ('Version',      c_uint8),
+        ('Crc',          c_uint16),
+        ('FriendlyName', c_uint8 * FRIENDLY_NAME_LEN),
+        ('FanProfile',   FanConfigStruct * (FAN_PROFILE_NUM * FAN_NUM)),
+        ('RGBConfig',    RGBConfigStruct * RGB_PROFILE_NUM),
+    ]
+
+
+# =============================================================================
 # Calibration — CalibrationStruct in benchlab.h
 # =============================================================================
 
@@ -357,6 +410,11 @@ _EXPECTED_SIZES = {
     "SensorStructBL2":       (SensorStructBL2,        368),
     "FanConfigStruct":       (FanConfigStruct,        14),
     "RGBConfigStruct":       (RGBConfigStruct,        6),
+    # 426, not the C# service's hardcoded 220 (a latent out-of-bounds-read
+    # bug there — see DeviceConfigStruct docstring). Field layout confirmed
+    # against BENCHLAB-FW firmware source; the command to actually read one
+    # (UART_CMD_READ_CONFIG) isn't implemented in any current firmware build.
+    "DeviceConfigStruct":    (DeviceConfigStruct,     426),
     "CalibrationValueStruct":(CalibrationValueStruct, 4),
     "CalibrationStruct":     (CalibrationStruct,      178),
     "CalibrationStructBL2":  (CalibrationStructBL2,   294),

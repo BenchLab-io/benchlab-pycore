@@ -27,7 +27,7 @@ def format_chip_temp(value: Union[int, float]) -> Optional[float]:
         >>> print(f"Chip temp: {temp}°C")
         Chip temp: 42.0°C
     """
-    if value > 100.0 or value < -100.0:
+    if value == 0x7FFF or value > 100.0 or value < -100.0:
         return None
     return round(value, 1)
 
@@ -56,6 +56,8 @@ def format_temp(value: Union[int, float]) -> Optional[float]:
         >>> print(temp)
         None
     """
+    if value == 0x7FFF:
+        return None
     temp_c = value / 10
     if temp_c > 100.0 or temp_c < -100.0:
         return None

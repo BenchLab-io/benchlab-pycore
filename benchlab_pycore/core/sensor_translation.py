@@ -119,7 +119,8 @@ def translate_sensor_struct_original(sensor_struct: SensorStructOriginal) -> Dic
 
     # ---- VIN Sensors ----
     for i in range(SENSOR_VIN_NUM_ORIGINAL):
-        data[f"VIN_{i}"] = sensor_struct.Vin[i] / 1000
+        raw = sensor_struct.Vin[i]
+        data[f"VIN_{i}"] = None if raw == 0x7FFF else raw / 1000
     data["Vdd"] = sensor_struct.Vdd / 1000
     data["Vref"] = sensor_struct.Vref / 1000
 
@@ -135,7 +136,7 @@ def translate_sensor_struct_original(sensor_struct: SensorStructOriginal) -> Dic
         data[f"Fan{i+1}_Duty"] = f.Duty
         data[f"Fan{i+1}_RPM"] = f.Tach
         data[f"Fan{i+1}_Status"] = f.Enable
-    data["FanExtDuty"] = sensor_struct.FanExtDuty
+    data["FanExtDuty"] = None if sensor_struct.FanExtDuty == 255 else sensor_struct.FanExtDuty
 
     return data
 
@@ -192,7 +193,8 @@ def translate_sensor_struct_bl2(sensor_struct: SensorStructBL2) -> Dict[str, Any
 
     # ---- VIN Sensors ----
     for i in range(SENSOR_VIN_NUM_BL2):
-        data[f"VIN_{i}"] = sensor_struct.Vin[i] / 1000
+        raw = sensor_struct.Vin[i]
+        data[f"VIN_{i}"] = None if raw == 0x7FFF else raw / 1000
     data["Vdd"] = sensor_struct.Vdd / 1000
     data["Vref"] = sensor_struct.Vref / 1000
 
@@ -208,6 +210,6 @@ def translate_sensor_struct_bl2(sensor_struct: SensorStructBL2) -> Dict[str, Any
         data[f"Fan{i+1}_Duty"] = f.Duty
         data[f"Fan{i+1}_RPM"] = f.Tach
         data[f"Fan{i+1}_Status"] = f.Enable
-    data["FanExtDuty"] = sensor_struct.FanExtDuty
+    data["FanExtDuty"] = None if sensor_struct.FanExtDuty == 255 else sensor_struct.FanExtDuty
 
     return data
