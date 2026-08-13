@@ -324,7 +324,7 @@ class CalibrationStructCFE(Structure):
     """Full calibration table for BENCHLAB-CFE.
 
     Same layout as CalibrationStruct but scaled to CFE sensor counts.
-    Total size: 378 bytes (packed).
+    Total size: 294 bytes (packed).
     """
     _fields_ = [
         ('Crc',                 c_uint16),

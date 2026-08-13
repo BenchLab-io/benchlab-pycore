@@ -152,9 +152,10 @@ def translate_sensor_struct_cfe(sensor_struct: SensorStructCFE) -> Dict[str, Any
     - 8 temperature sensors (4 more than original, with HPWR1/HPWR2 IN/OUT)
     - 9 fans (same as original)
 
-    SYS_Power is the sum of CPU, GPU, MB, and all HPWR wire sensors
-    (HPWR1_W1-6 at indices 11-16, HPWR2_W1-6 at indices 17-22), giving
-    a complete picture of total system power draw on CFE devices.
+    SYS_Power is the sum of CPU, GPU, and MB power only. The HPWR wire
+    sensors (HPWR1_W1-6 at indices 11-16, HPWR2_W1-6 at indices 17-22)
+    are sub-measurements of HPWR1/HPWR2 and are excluded to avoid
+    double-counting.
 
     Args:
         sensor_struct: Raw sensor data from CFE device.

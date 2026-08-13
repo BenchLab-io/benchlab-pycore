@@ -29,7 +29,6 @@ Notes:
 Example::
 
     import serial
-import time
     from benchlab_pycore.core import read_sensors
     from benchlab_pycore.core.config_io import (
         ping, read_name, write_name,
@@ -221,10 +220,13 @@ def write_name(ser: serial.Serial, name: str) -> bool:
 
     Args:
         ser:  Open serial connection to the device.
-        name: New friendly name (max 31 UTF-8 bytes; truncated if longer).
+        name: New friendly name (max 30 UTF-8 bytes).
 
     Returns:
         True if the bytes were sent successfully (no ACK from firmware).
+
+    Raises:
+        ValueError: If the UTF-8 encoding of *name* exceeds 30 bytes.
 
     Example::
 
@@ -234,7 +236,11 @@ def write_name(ser: serial.Serial, name: str) -> bool:
     # Cap at FRIENDLY_NAME_LEN - 2 to leave room for cmd byte and null terminator
     # Total packet: [cmd(1)] + [name bytes] + [null(1)] <= FRIENDLY_NAME_LEN
     max_name_bytes = FRIENDLY_NAME_LEN - 2  # 30 bytes for name + 1 for null + 1 for cmd = 32
-    encoded = name.encode("utf-8")[:max_name_bytes]
+    encoded = name.encode("utf-8")
+    if len(encoded) > max_name_bytes:
+        raise ValueError(
+            f"name must be at most {max_name_bytes} UTF-8 bytes, got {len(encoded)}"
+        )
     # Add null terminator so firmware knows where the name ends
     payload = bytes([BENCHLAB_CMD.UART_CMD_WRITE_NAME]) + encoded + b'\x00'
     ok = _write(ser, payload)
@@ -255,10 +261,8 @@ def read_fan_profile(
     """Read one fan channel's configuration from a stored profile.
 
     Mirrors ``UART_CMD_READ_FAN_PROFILE``.  The firmware expects a 3-byte
-    command ``[cmd, fan_profile, fan_id]``.  Depending on firmware version it
-    Mirrors ``UART_CMD_READ_FAN_PROFILE``.  The firmware expects a 3-byte
     command ``[cmd, fan_profile, fan_id]`` and responds with exactly
-    ``sizeof(FanConfigStruct)`` (13) bytes.
+    ``sizeof(FanConfigStruct)`` (14) bytes.
 
     Args:
         ser:         Open serial connection to the device.
@@ -558,8 +562,8 @@ def load_calibration(ser: serial.Serial, cal_id: int) -> bool:
 
     Args:
         ser:    Open serial connection to the device.
-        cal_id: Slot to load — ``0`` = user calibration,
-                ``1`` = factory calibration.
+        cal_id: Slot to load — ``0`` = factory calibration,
+                ``1`` = user calibration.
 
     Returns:
         True if bytes were sent (no ACK from firmware).
@@ -569,9 +573,9 @@ def load_calibration(ser: serial.Serial, cal_id: int) -> bool:
 
     Example::
 
-        >>> load_calibration(ser, 0)   # restore user cal
+        >>> load_calibration(ser, 1)   # restore user cal
         True
-        >>> load_calibration(ser, 1)   # restore factory cal
+        >>> load_calibration(ser, 0)   # restore factory cal
         True
     """
     if cal_id not in (CAL_FACTORY, CAL_USER):
@@ -591,8 +595,8 @@ def store_calibration(ser: serial.Serial, cal_id: int) -> bool:
 
     Args:
         ser:    Open serial connection to the device.
-        cal_id: Destination slot — ``0`` = user calibration,
-                ``1`` = factory calibration.
+        cal_id: Destination slot — ``0`` = factory calibration,
+                ``1`` = user calibration.
 
     Returns:
         True if bytes were sent (no ACK from firmware).
@@ -602,7 +606,7 @@ def store_calibration(ser: serial.Serial, cal_id: int) -> bool:
 
     Example::
 
-        >>> store_calibration(ser, 0)   # persist user cal
+        >>> store_calibration(ser, 1)   # persist user cal
         True
     """
     if cal_id not in (CAL_FACTORY, CAL_USER):

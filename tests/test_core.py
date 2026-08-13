@@ -97,22 +97,16 @@ def test_get_benchlab_ports_serial_exception(mock_comports):
         get_benchlab_ports()
 
 
-@patch("benchlab_pycore.core.serial_io.serial.tools.list_ports.comports")
+@patch("benchlab_pycore.core.serial_io.get_benchlab_ports")
+@patch("benchlab_pycore.core.serial_io.read_device")
+@patch("benchlab_pycore.core.serial_io.read_uid")
 @patch("benchlab_pycore.core.serial_io.serial.Serial")
-def test_find_benchlab_devices_success(mock_serial, mock_comports):
+def test_find_benchlab_devices_success(mock_serial, mock_read_uid, mock_read_device, mock_get_ports):
     """Test find_benchlab_devices with mock devices."""
-    # Mock port objects
-    mock_port = Mock()
-    mock_port.device = "COM3"
-    mock_port.hwid = "USB VID:PID=0483:5740"
-    
-    mock_comports.return_value = [("COM3", "desc", "USB VID:PID=0483:5740")]
-    
-    # Mock serial connection
-    mock_ser = Mock()
-    mock_ser.readline.side_effect = [b"123456789ABC\n", b"1.0\n"]
-    mock_serial.return_value = mock_ser
-    
+    mock_get_ports.return_value = [{"port": "COM3"}]
+    mock_read_device.return_value = {"FwVersion": "1.0"}
+    mock_read_uid.return_value = "123456789ABC"
+
     result = find_benchlab_devices()
     assert len(result) == 1
     assert result[0]["port"] == "COM3"
@@ -120,13 +114,13 @@ def test_find_benchlab_devices_success(mock_serial, mock_comports):
     assert result[0]["fw"] == "1.0"
 
 
-@patch("benchlab_pycore.core.serial_io.serial.tools.list_ports.comports")
+@patch("benchlab_pycore.core.serial_io.get_benchlab_ports")
 @patch("benchlab_pycore.core.serial_io.serial.Serial")
-def test_find_benchlab_devices_serial_failure(mock_serial, mock_comports):
+def test_find_benchlab_devices_serial_failure(mock_serial, mock_get_ports):
     """Test find_benchlab_devices with serial connection failure."""
-    mock_comports.return_value = [("COM3", "desc", "USB VID:PID=0483:5740")]
+    mock_get_ports.return_value = [{"port": "COM3"}]
     mock_serial.side_effect = serial.SerialException("Cannot open port")
-    
+
     result = find_benchlab_devices()
     assert len(result) == 1
     assert result[0]["port"] == "COM3"

@@ -64,79 +64,72 @@ def test_config_imports():
         assert callable(fn)
 
     # Structures are ctypes Structures
-    for cls in (FanCurvePoint, FanConfigStruct, RGBConfigStruct, CalibrationEntry, CalibrationStruct):
+    for cls in (FanConfigStruct, RGBConfigStruct, CalibrationValueStruct, CalibrationStruct):
         assert isinstance(cls(), Structure)
 
 
 def test_config_constants():
     """Verify config constants have the expected values."""
     assert FAN_PROFILE_NUM == 3
-    assert RGB_PROFILE_NUM == 4
+    assert RGB_PROFILE_NUM == 2
     assert CAL_NUM == 2
     assert FRIENDLY_NAME_LEN == 32
-    assert FAN_CURVE_POINTS == 10
+    assert FAN_CURVE_POINTS == 2
 
 
 # -----------------------
 # Test config structure sizes and fields
 # -----------------------
 
-def test_fan_curve_point_fields():
-    """FanCurvePoint must expose Temp and Duty fields."""
-    p = FanCurvePoint()
-    p.Temp = -500
-    p.Duty = 75
-    assert p.Temp == -500
-    assert p.Duty == 75
-
-
 def test_fan_config_struct_fields():
-    """FanConfigStruct must expose Mode, FixedDuty, TempSource, and Curve array."""
+    """FanConfigStruct must expose FanMode, FixedDuty, TempSource, and Temp/Duty arrays."""
     cfg = FanConfigStruct()
-    cfg.Mode = 1
+    cfg.FanMode = 1
     cfg.FixedDuty = 80
     cfg.TempSource = 3
-    cfg.Curve[0].Temp = 300
-    cfg.Curve[0].Duty = 50
-    assert cfg.Mode == 1
+    cfg.Temp[0] = 300
+    cfg.Duty[0] = 50
+    assert cfg.FanMode == 1
     assert cfg.FixedDuty == 80
     assert cfg.TempSource == 3
-    assert cfg.Curve[0].Temp == 300
-    assert cfg.Curve[0].Duty == 50
-    assert len(cfg.Curve) == FAN_CURVE_POINTS
+    assert cfg.Temp[0] == 300
+    assert cfg.Duty[0] == 50
+    assert len(cfg.Temp) == FAN_CURVE_POINTS
+    assert len(cfg.Duty) == FAN_CURVE_POINTS
 
 
 def test_rgb_config_struct_fields():
-    """RGBConfigStruct must expose Mode, R, G, B, Speed, Brightness."""
+    """RGBConfigStruct must expose Mode, Red, Green, Blue, Direction, Speed."""
     rgb = RGBConfigStruct()
     rgb.Mode = 2
-    rgb.R = 255
-    rgb.G = 128
-    rgb.B = 0
+    rgb.Red = 255
+    rgb.Green = 128
+    rgb.Blue = 0
+    rgb.Direction = 1
     rgb.Speed = 10
-    rgb.Brightness = 200
     assert rgb.Mode == 2
-    assert rgb.R == 255
-    assert rgb.G == 128
-    assert rgb.B == 0
+    assert rgb.Red == 255
+    assert rgb.Green == 128
+    assert rgb.Blue == 0
+    assert rgb.Direction == 1
     assert rgb.Speed == 10
-    assert rgb.Brightness == 200
 
 
-def test_calibration_entry_fields():
-    """CalibrationEntry must expose Offset and Scale."""
-    e = CalibrationEntry()
+def test_calibration_value_struct_fields():
+    """CalibrationValueStruct must expose Offset and GainOffset."""
+    e = CalibrationValueStruct()
     e.Offset = -42
-    e.Scale = 256
+    e.GainOffset = 256
     assert e.Offset == -42
-    assert e.Scale == 256
+    assert e.GainOffset == 256
 
 
 def test_calibration_struct_size():
-    """CalibrationStruct must be non-empty and hold CalibrationEntry array."""
+    """CalibrationStruct must be non-empty and hold its named calibration fields."""
     cal = CalibrationStruct()
     assert sizeof(cal) > 0
-    assert len(cal.Entries) > 0
+    assert isinstance(cal.Vdd, CalibrationValueStruct)
+    assert len(cal.Vin) > 0
 
 
 def test_fan_config_struct_size_positive():
@@ -206,25 +199,22 @@ def test_read_name_uart_failure(mock_read_uart):
 
 
 def test_write_name_success():
-    """write_name() sends cmd byte + encoded name."""
+    """write_name() sends cmd byte + encoded name + null terminator."""
     mock_ser = Mock()
-    mock_ser.write.return_value = 12   # len("My BENCHLAB") + 1 cmd byte
+    mock_ser.write.return_value = 13   # len("My BENCHLAB") + 1 cmd byte + 1 null
     result = write_name(mock_ser, "My BENCHLAB")
     assert result is True
     sent = mock_ser.write.call_args[0][0]
     assert sent[0] == BENCHLAB_CMD.UART_CMD_WRITE_NAME
-    assert sent[1:] == b"My BENCHLAB"
+    assert sent[1:] == b"My BENCHLAB\x00"
 
 
-def test_write_name_truncates_long_name():
-    """write_name() silently truncates names longer than FRIENDLY_NAME_LEN-1."""
+def test_write_name_too_long_raises():
+    """write_name() raises ValueError instead of silently truncating."""
     mock_ser = Mock()
     long_name = "X" * 100
-    mock_ser.write.return_value = FRIENDLY_NAME_LEN
-    write_name(mock_ser, long_name)
-    sent = mock_ser.write.call_args[0][0]
-    # cmd byte + max payload
-    assert len(sent) == FRIENDLY_NAME_LEN
+    with pytest.raises(ValueError):
+        write_name(mock_ser, long_name)
 
 
 def test_write_name_serial_error():
@@ -240,7 +230,7 @@ def test_write_name_serial_error():
 
 def _make_fan_config_bytes():
     cfg = FanConfigStruct()
-    cfg.Mode = 1
+    cfg.FanMode = 1
     cfg.FixedDuty = 60
     from ctypes import create_string_buffer, memmove, addressof
     buf = create_string_buffer(sizeof(cfg))
@@ -258,7 +248,7 @@ def test_read_fan_profile_success():
     result = read_fan_profile(mock_ser, fan_profile=0, fan_id=2)
 
     assert isinstance(result, FanConfigStruct)
-    assert result.Mode == 1
+    assert result.FanMode == 1
     assert result.FixedDuty == 60
     sent = mock_ser.write.call_args[0][0]
     assert sent == bytes([BENCHLAB_CMD.UART_CMD_READ_FAN_PROFILE, 0, 2])
@@ -327,9 +317,9 @@ def test_write_fan_profile_invalid_fan_id():
 def _make_rgb_config_bytes(mode=3, r=100, g=200, b=50):
     rgb = RGBConfigStruct()
     rgb.Mode = mode
-    rgb.R = r
-    rgb.G = g
-    rgb.B = b
+    rgb.Red = r
+    rgb.Green = g
+    rgb.Blue = b
     from ctypes import create_string_buffer, memmove, addressof
     buf = create_string_buffer(sizeof(rgb))
     memmove(buf, addressof(rgb), sizeof(rgb))
@@ -343,15 +333,15 @@ def test_read_rgb_profile_success():
     mock_ser.write.return_value = 2
     mock_ser.read.return_value = raw
 
-    result = read_rgb_profile(mock_ser, rgb_profile=2)
+    result = read_rgb_profile(mock_ser, rgb_profile=1)
 
     assert isinstance(result, RGBConfigStruct)
     assert result.Mode == 3
-    assert result.R == 100
-    assert result.G == 200
-    assert result.B == 50
+    assert result.Red == 100
+    assert result.Green == 200
+    assert result.Blue == 50
     sent = mock_ser.write.call_args[0][0]
-    assert sent == bytes([BENCHLAB_CMD.UART_CMD_READ_RGB, 2])
+    assert sent == bytes([BENCHLAB_CMD.UART_CMD_READ_RGB, 1])
 
 
 def test_read_rgb_profile_short_response():
@@ -378,9 +368,9 @@ def test_write_rgb_profile_success():
     mock_ser = Mock()
     rgb = RGBConfigStruct()
     rgb.Mode = 1
-    rgb.R = 255
-    rgb.G = 0
-    rgb.B = 128
+    rgb.Red = 255
+    rgb.Green = 0
+    rgb.Blue = 128
     expected_len = 2 + sizeof(RGBConfigStruct)
     mock_ser.write.return_value = expected_len
 
@@ -466,8 +456,10 @@ def test_write_calibration_full_sends_chunks():
     """write_calibration() splits large struct into multiple CDC packets."""
     mock_ser = Mock()
     chunk_size = 10
-    # Each chunk is chunk_size + 2 bytes (cmd + offset)
-    mock_ser.write.return_value = chunk_size + 2   # always succeeds
+    # Each write's return length must match the actual packet sent (the
+    # last packet is shorter than chunk_size + 2 since the struct doesn't
+    # divide evenly by chunk_size).
+    mock_ser.write.side_effect = lambda data: len(data)
 
     cal = CalibrationStruct()
     result = write_calibration(mock_ser, cal, chunk_size=chunk_size)
@@ -496,11 +488,12 @@ def test_write_calibration_chunk_offsets_are_sequential():
     """write_calibration() passes correct byte offsets to each chunk."""
     mock_ser = Mock()
     chunk_size = 10
-    mock_ser.write.return_value = chunk_size + 2  # always "succeeds"
+    mock_ser.write.side_effect = lambda data: len(data)  # always "succeeds"
 
     cal = CalibrationStruct()
-    write_calibration(mock_ser, cal, chunk_size=chunk_size)
+    result = write_calibration(mock_ser, cal, chunk_size=chunk_size)
 
+    assert result is True
     offsets = [c[0][0][1] for c in mock_ser.write.call_args_list]  # byte at index 1
     for i, offset in enumerate(offsets):
         assert offset == i * chunk_size

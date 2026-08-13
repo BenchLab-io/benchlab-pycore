@@ -102,30 +102,21 @@ def find_benchlab_devices() -> List[Dict[str, str]]:
         >>> print(devices)
         [{'port': 'COM3', 'uid': '123456789ABC', 'fw': '1.0'}, ...]
     """
-    try:
-        comports = serial.tools.list_ports.comports()
-    except serial.SerialException as e:
-        logger.error("Failed to enumerate serial ports: %s", e)
-        raise
-
     devices = []
-    for port, desc, hwid in comports:
-        if _BENCHLAB_VID_PID not in hwid.upper():
-            continue
+    for port_info in get_benchlab_ports():
+        port = port_info["port"]
+        uid, fw = "?", "?"
         try:
-            ser = serial.Serial(port, baudrate=115200, timeout=1)
-            ser.write(b"i\n")
-            uid = ser.readline().decode(errors="ignore").strip()
-            fw = ser.readline().decode(errors="ignore").strip()
-            ser.close()
+            with serial.Serial(port, baudrate=115200, timeout=1) as ser:
+                device_info = read_device(ser)
+                uid = read_uid(ser) or "?"
+                fw = str(device_info.get("FwVersion")) if device_info else "?"
             logger.info("Found device on %s: UID=%s, FW=%s", port, uid, fw)
         except serial.SerialException as e:
-            uid, fw = "?", "?"
             logger.warning("Failed to open serial port %s: %s", port, e)
         except Exception as e:
-            uid, fw = "?", "?"
             logger.warning("Failed to read device on %s: %s", port, e)
-        devices.append({"port": port, "uid": uid, "firmware": fw})
+        devices.append({"port": port, "uid": uid, "fw": fw})
     return devices
 
 
@@ -168,35 +159,6 @@ def get_fleet_info() -> List[Dict[str, Union[str, int]]]:
         except Exception as e:
             logger.warning("Failed to get device info from %s: %s", port, e)
     return fleet
-
-
-def open_serial_connection(port: Optional[str] = None) -> Optional[serial.Serial]:
-    """Open and return a serial connection to the given port.
-
-    Args:
-        port (Optional[str]): The COM port to open. If None, returns None.
-
-    Returns:
-        Optional[serial.Serial]: Opened serial connection or None if failed.
-
-    Raises:
-        serial.SerialException: If the port cannot be opened.
-
-    Example:
-        >>> ser = open_serial_connection('COM3')
-        >>> if ser:
-        >>>     # Use the connection
-        >>>     ser.close()
-    """
-    if not port:
-        return None
-    try:
-        ser = serial.Serial(port, baudrate=115200, timeout=1)
-        logger.info("Opened serial port %s", port)
-        return ser
-    except serial.SerialException as e:
-        logger.error("Could not open port %s: %s", port, e)
-        return None
 
 
 # --- UART helpers ---
