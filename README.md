@@ -5,9 +5,9 @@
 ## Features
 
 - **Device Discovery**: Automatically detect connected BENCHLAB devices
-- **Multi-Variant Support**: Compatible with both ORIGINAL (0x10) and CFE (0x11) device variants
+- **Multi-Variant Support**: Compatible with both ORIGINAL (0x10) and BL2 (0x11) device variants
 - **Sensor Data Reading**: Read raw sensor data including power, voltage, temperature, and fan information
-- **Extended Telemetry (CFE)**: CFE variant provides 23 power sensors and 8 temperature sensors (vs 11 and 4 in ORIGINAL)
+- **Extended Telemetry (BL2)**: BL2 variant provides 23 power sensors and 8 temperature sensors (vs 11 and 4 in ORIGINAL)
 - **Device Configuration**: Read and write fan profiles, RGB profiles, friendly name, and calibration
 - **Calibration Management**: Load and store calibration to factory and user flash slots
 - **Serial Communication**: Handle USB-to-serial communication with BENCHLAB devices
@@ -51,7 +51,7 @@ if devices:
     ser.close()
 ```
 
-### Working with CFE Devices
+### Working with BL2 Devices
 
 ```python
 import serial
@@ -60,7 +60,7 @@ from benchlab_pycore.core import (
     read_sensors,
     read_device,
     translate_sensor_struct,
-    BENCHLAB_CFE_PRODUCT_ID,
+    BENCHLAB_BL2_PRODUCT_ID,
     BENCHLAB_ORIGINAL_PRODUCT_ID,
 )
 
@@ -72,7 +72,7 @@ def read_with_variant_detection(port):
             return None
 
         product_id = device_info['ProductId']
-        variant = "CFE" if product_id == BENCHLAB_CFE_PRODUCT_ID else "ORIGINAL"
+        variant = "BL2" if product_id == BENCHLAB_BL2_PRODUCT_ID else "ORIGINAL"
         print(f"Device on {port}: {variant} (Product ID: 0x{product_id:02X})")
 
         sensors = read_sensors(ser, product_id=product_id)
@@ -82,7 +82,7 @@ def read_with_variant_detection(port):
             print(f"  GPU Power:  {data['GPU_Power']}W")
             print(f"  Chip Temp:  {data['Chip_Temp']}°C")
 
-            if variant == "CFE":
+            if variant == "BL2":
                 print(f"  TS_HPWR1_IN:  {data.get('TS_HPWR1_IN', 'N/A')}°C")
                 print(f"  TS_HPWR2_OUT: {data.get('TS_HPWR2_OUT', 'N/A')}°C")
             return data
@@ -155,9 +155,9 @@ ser.close()
 
 - **`read_device(ser)`** → `Optional[Dict[str, int]]`
   Reads vendor info. Returns dict with `'VendorId'`, `'ProductId'`, `'FwVersion'`.
-  Use `ProductId` to determine variant: `0x10` = ORIGINAL, `0x11` = CFE.
+  Use `ProductId` to determine variant: `0x10` = ORIGINAL, `0x11` = BL2.
 
-- **`read_sensors(ser, product_id=None)`** → `Optional[Union[SensorStructOriginal, SensorStructCFE]]`
+- **`read_sensors(ser, product_id=None)`** → `Optional[Union[SensorStructOriginal, SensorStructBL2]]`
   Reads all sensors. Pass `product_id` to select the correct struct.
 
 - **`read_uid(ser, retries=3, delay=0.2)`** → `Optional[str]`
@@ -226,31 +226,31 @@ RGB profiles are indexed 0–1.
 
 ### Configuration — Calibration
 
-Calibration structs are device-scoped — ORIGINAL and CFE have different sizes and are automatically selected based on `product_id`.
+Calibration structs are device-scoped — ORIGINAL and BL2 have different sizes and are automatically selected based on `product_id`.
 
 | Variant | Struct | Size |
 |---------|--------|------|
 | ORIGINAL | `CalibrationStruct` | 178 bytes |
-| CFE | `CalibrationStructCFE` | 294 bytes |
+| BL2 | `CalibrationStructBL2` | 294 bytes |
 
-`CalibrationStruct` / `CalibrationStructCFE` fields:
+`CalibrationStruct` / `CalibrationStructBL2` fields:
 
 | Field | Description |
 |-------|-------------|
 | `Crc` | CRC of calibration data (firmware-computed) |
 | `Vin[N]` | VIN channel calibrations (N=13 both variants) |
 | `Vdd`, `Vref` | Supply and reference voltage calibrations |
-| `Ts[N]` | Temperature sensor calibrations (N=4 ORIGINAL, N=8 CFE) |
+| `Ts[N]` | Temperature sensor calibrations (N=4 ORIGINAL, N=8 BL2) |
 | `TsB[N]` | Thermistor B-coefficient selection (0=TS_B_3950, 1=TS_B_3380) |
 | `Tamb`, `Hum` | Ambient temperature and humidity calibrations |
-| `PowerReadingVoltage[N]` | Power sensor voltage calibrations (N=11 ORIGINAL, N=23 CFE) |
-| `PowerReadingCurrent[N]` | Power sensor current calibrations (N=11 ORIGINAL, N=23 CFE) |
+| `PowerReadingVoltage[N]` | Power sensor voltage calibrations (N=11 ORIGINAL, N=23 BL2) |
+| `PowerReadingCurrent[N]` | Power sensor current calibrations (N=11 ORIGINAL, N=23 BL2) |
 
 Each `CalibrationValueStruct` entry has:
 - `Offset` (`int16`): Additive offset in raw ADC units
 - `GainOffset` (`int16`): Gain offset (Q12 fixed-point, multiplier = 4096)
 
-- **`read_calibration(ser, product_id=None)`** → `Optional[Union[CalibrationStruct, CalibrationStructCFE]]`
+- **`read_calibration(ser, product_id=None)`** → `Optional[Union[CalibrationStruct, CalibrationStructBL2]]`
   Reads the full calibration table from RAM. Selects the correct struct automatically.
 
 - **`write_calibration(ser, calibration, product_id=None)`** → `bool`
@@ -273,7 +273,7 @@ Each `CalibrationValueStruct` entry has:
 
 ### Sensor Data Format
 
-`translate_sensor_struct()` returns a flat dictionary. Sensors marked **[CFE]** are only available on CFE devices.
+`translate_sensor_struct()` returns a flat dictionary. Sensors marked **[BL2]** are only available on BL2 devices.
 
 #### Power Totals
 - `SYS_Power`: Total system power (W)
@@ -289,8 +289,8 @@ Each `CalibrationValueStruct` entry has:
 | ATX3V, ATX5V, ATX5VSB, ATX12V | All devices |
 | PCIE1, PCIE2, PCIE3 | All devices |
 | HPWR1, HPWR2 | All devices |
-| HPWR1_W1–HPWR1_W6 | **[CFE]** |
-| HPWR2_W1–HPWR2_W6 | **[CFE]** |
+| HPWR1_W1–HPWR1_W6 | **[BL2]** |
+| HPWR2_W1–HPWR2_W6 | **[BL2]** |
 
 Each rail exposes `{Rail}_Voltage` (V), `{Rail}_Current` (A), `{Rail}_Power` (W).
 
@@ -299,7 +299,7 @@ Each rail exposes `{Rail}_Voltage` (V), `{Rail}_Current` (A), `{Rail}_Power` (W)
 - `Ambient_Temp`: Ambient temperature (°C)
 - `Humidity`: Relative humidity (%)
 - `TS_1`–`TS_4`: External temperature sensors (°C) — `None` if no sensor connected
-- `TS_HPWR1_IN`, `TS_HPWR1_OUT`, `TS_HPWR2_IN`, `TS_HPWR2_OUT` — **[CFE]**
+- `TS_HPWR1_IN`, `TS_HPWR1_OUT`, `TS_HPWR2_IN`, `TS_HPWR2_OUT` — **[BL2]**
 
 #### Fans (All Devices)
 - `Fan1_Duty`–`Fan9_Duty`: Duty cycle (%)
@@ -312,7 +312,7 @@ Each rail exposes `{Rail}_Voltage` (V), `{Rail}_Current` (A), `{Rail}_Power` (W)
 - `Vdd`: Supply voltage (V)
 - `Vref`: Reference voltage (V)
 
-> Total sensor count: ~75 keys for ORIGINAL, ~127 keys for CFE.
+> Total sensor count: ~75 keys for ORIGINAL, ~127 keys for BL2.
 
 ## Integration Examples
 

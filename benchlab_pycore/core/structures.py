@@ -6,7 +6,7 @@ and are packed to match the STM32 memory layout exactly.
 
 Variants:
     - ORIGINAL: The original BENCHLAB device (Product ID: 0x10)
-    - CFE: The extended BENCHLAB-CFE device (Product ID: 0x11)
+    - BL2: The extended BENCHLAB-2 device (Product ID: 0x11)
 """
 
 from ctypes import Structure, c_uint8, c_uint16, c_int16, c_int32
@@ -36,23 +36,23 @@ SENSOR_POWER_NAMES_ORIGINAL = [
 SENSOR_TS_NAMES_ORIGINAL = ["TS_1", "TS_2", "TS_3", "TS_4"]
 
 # =============================================================================
-# CFE Variant Constants
+# BL2 Variant Constants
 # =============================================================================
-BENCHLAB_CFE_PRODUCT_ID       = 0x11
-BENCHLAB_CFE_FIRMWARE_VERSION = 0xFF
+BENCHLAB_BL2_PRODUCT_ID       = 0x11
+BENCHLAB_BL2_FIRMWARE_VERSION = 0xFF
 
-SENSOR_VIN_NUM_CFE   = 13
-SENSOR_POWER_NUM_CFE = 23
-SENSOR_TS_NUM_CFE    = 8
+SENSOR_VIN_NUM_BL2   = 13
+SENSOR_POWER_NUM_BL2 = 23
+SENSOR_TS_NUM_BL2    = 8
 
-SENSOR_POWER_NAMES_CFE = [
+SENSOR_POWER_NAMES_BL2 = [
     "EPS1", "EPS2", "ATX3V", "ATX5V", "ATX5VSB", "ATX12V",
     "PCIE1", "PCIE2", "PCIE3", "HPWR1", "HPWR2",
     "HPWR1_W1", "HPWR1_W2", "HPWR1_W3", "HPWR1_W4", "HPWR1_W5", "HPWR1_W6",
     "HPWR2_W1", "HPWR2_W2", "HPWR2_W3", "HPWR2_W4", "HPWR2_W5", "HPWR2_W6",
 ]
 
-SENSOR_TS_NAMES_CFE = [
+SENSOR_TS_NAMES_BL2 = [
     "TS_1", "TS_2", "TS_3", "TS_4",
     "TS_HPWR1_IN", "TS_HPWR1_OUT", "TS_HPWR2_IN", "TS_HPWR2_OUT",
 ]
@@ -107,21 +107,21 @@ class SensorStructOriginal(Structure):
     ]
 
 
-class SensorStructCFE(Structure):
-    """Sensor data for BENCHLAB-CFE (extended variant)."""
+class SensorStructBL2(Structure):
+    """Sensor data for BENCHLAB-2 (extended variant)."""
     _fields_ = [
-        ('Vin',             c_int16  * SENSOR_VIN_NUM_CFE),
+        ('Vin',             c_int16  * SENSOR_VIN_NUM_BL2),
         ('Vdd',             c_uint16),
         ('Vref',            c_uint16),
         ('Tchip',           c_int16),
-        ('Ts',              c_int16  * SENSOR_TS_NUM_CFE),
+        ('Ts',              c_int16  * SENSOR_TS_NUM_BL2),
         ('Tamb',            c_int16),
         ('Hum',             c_uint16),
         ('FanSwitchStatus', c_uint8),
         ('RGBSwitchStatus', c_uint8),
         ('RgbExtStatus',    c_uint8),
         ('FanExtDuty',      c_uint8),
-        ('PowerReadings',   PowerSensor * SENSOR_POWER_NUM_CFE),
+        ('PowerReadings',   PowerSensor * SENSOR_POWER_NUM_BL2),
         ('Fans',            FanSensor   * FAN_NUM),
     ]
 
@@ -320,29 +320,29 @@ class CalibrationStruct(Structure):
     ]
 
 
-class CalibrationStructCFE(Structure):
-    """Full calibration table for BENCHLAB-CFE.
+class CalibrationStructBL2(Structure):
+    """Full calibration table for BENCHLAB-2.
 
-    Same layout as CalibrationStruct but scaled to CFE sensor counts.
+    Same layout as CalibrationStruct but scaled to BL2 sensor counts.
     Total size: 294 bytes (packed).
     """
     _fields_ = [
         ('Crc',                 c_uint16),
-        ('Vin',                 CalibrationValueStruct * SENSOR_VIN_NUM_CFE),
+        ('Vin',                 CalibrationValueStruct * SENSOR_VIN_NUM_BL2),
         ('Vdd',                 CalibrationValueStruct),
         ('Vref',                CalibrationValueStruct),
-        ('Ts',                  CalibrationValueStruct * SENSOR_TS_NUM_CFE),
-        ('TsB',                 c_uint8 * SENSOR_TS_NUM_CFE),
+        ('Ts',                  CalibrationValueStruct * SENSOR_TS_NUM_BL2),
+        ('TsB',                 c_uint8 * SENSOR_TS_NUM_BL2),
         ('Tamb',                CalibrationValueStruct),
         ('Hum',                 CalibrationValueStruct),
-        ('PowerReadingVoltage', CalibrationValueStruct * SENSOR_POWER_NUM_CFE),
-        ('PowerReadingCurrent', CalibrationValueStruct * SENSOR_POWER_NUM_CFE),
+        ('PowerReadingVoltage', CalibrationValueStruct * SENSOR_POWER_NUM_BL2),
+        ('PowerReadingCurrent', CalibrationValueStruct * SENSOR_POWER_NUM_BL2),
     ]
 
 
 # =============================================================================
 # Struct size assertions
-# Verified against firmware headers (benchlab.h for ORIGINAL and CFE).
+# Verified against firmware headers (benchlab.h for ORIGINAL and BL2).
 # These will raise AssertionError at import time if a future change to
 # struct layout or _pack_ settings causes a size mismatch.
 # =============================================================================
@@ -354,12 +354,12 @@ _EXPECTED_SIZES = {
     "PowerSensor":           (PowerSensor,            12),
     "FanSensor":             (FanSensor,              4),
     "SensorStructOriginal":  (SensorStructOriginal,   216),
-    "SensorStructCFE":       (SensorStructCFE,        368),
+    "SensorStructBL2":       (SensorStructBL2,        368),
     "FanConfigStruct":       (FanConfigStruct,        14),
     "RGBConfigStruct":       (RGBConfigStruct,        6),
     "CalibrationValueStruct":(CalibrationValueStruct, 4),
     "CalibrationStruct":     (CalibrationStruct,      178),
-    "CalibrationStructCFE":  (CalibrationStructCFE,   294),
+    "CalibrationStructBL2":  (CalibrationStructBL2,   294),
 }
 
 for _name, (_struct, _expected) in _EXPECTED_SIZES.items():

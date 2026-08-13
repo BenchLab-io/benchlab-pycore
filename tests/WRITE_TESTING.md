@@ -193,7 +193,7 @@ python tests/test_write_validation.py COM4 --test-fan
 [INFO] Connecting to device...
 [INFO] Auto-detected device on COM4
 [SUCCESS] Connected to device on COM4
-[INFO]   Variant: CFE (Product ID: 0x11)
+[INFO]   Variant: BL2 (Product ID: 0x11)
 [INFO]   Firmware: 2
 [INFO] Creating backup of current configuration...
 [INFO]   Backed up device name: 'My BENCHLAB'
@@ -445,7 +445,7 @@ If you encounter issues:
 - **Device Name:** Only the friendly name (31 chars max)
 - **Fan Profile:** Only profile 0, fan channel 0 (out of 3 profiles × 9 channels)
 - **RGB Profile:** Only profile 0 (out of 2 profiles)
-- **Calibration:** Full calibration struct (178 bytes ORIGINAL, 294 bytes CFE)
+- **Calibration:** Full calibration struct (178 bytes ORIGINAL, 294 bytes BL2)
 - **Actions:** Save and load operations (not reset)
 
 ### What Does NOT Get Tested

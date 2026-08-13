@@ -44,7 +44,7 @@ from benchlab_pycore.core import (
 
     # Calibration
     CalibrationStruct,       # ORIGINAL — 178 bytes
-    CalibrationStructCFE,    # CFE      — 294 bytes
+    CalibrationStructBL2,    # BL2      — 294 bytes
     CalibrationValueStruct,
 
     # Constants
@@ -224,12 +224,12 @@ write_rgb_profile(ser, rgb_profile=0, config=rgb)
 
 ## Calibration
 
-Calibration adjusts sensor readings. The struct layout is **device-scoped** — ORIGINAL and CFE have different sizes because they have different sensor counts.
+Calibration adjusts sensor readings. The struct layout is **device-scoped** — ORIGINAL and BL2 have different sizes because they have different sensor counts.
 
 | Variant | Struct | Size |
 |---------|--------|------|
 | ORIGINAL | `CalibrationStruct` | 178 bytes |
-| CFE | `CalibrationStructCFE` | 294 bytes |
+| BL2 | `CalibrationStructBL2` | 294 bytes |
 
 Pass `product_id` to all calibration functions so the correct struct is selected automatically.
 
@@ -237,7 +237,7 @@ Pass `product_id` to all calibration functions so the correct struct is selected
 
 Both variants share the same field structure, scaled to their respective sensor counts:
 
-| Field | ORIGINAL | CFE |
+| Field | ORIGINAL | BL2 |
 |-------|----------|-----|
 | `Crc` | `uint16` | `uint16` |
 | `Vin[N]` | N=13 | N=13 |
@@ -339,7 +339,7 @@ from benchlab_pycore.core import (
     read_rgb_profile, write_rgb_profile,
     read_calibration, write_calibration, store_calibration,
     FanConfigStruct, FanMode, RGBConfigStruct, RGBMode,
-    CAL_USER, BENCHLAB_CFE_PRODUCT_ID,
+    CAL_USER, BENCHLAB_BL2_PRODUCT_ID,
     send_action,
 )
 

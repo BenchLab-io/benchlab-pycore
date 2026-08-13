@@ -105,10 +105,10 @@ def connect(port: str = None) -> tuple:
         ser.close()
         sys.exit(1)
 
-    from benchlab_pycore.core import BENCHLAB_CFE_PRODUCT_ID, BENCHLAB_ORIGINAL_PRODUCT_ID
+    from benchlab_pycore.core import BENCHLAB_BL2_PRODUCT_ID, BENCHLAB_ORIGINAL_PRODUCT_ID
     pid = info["ProductId"]
     variant = (
-        "BENCHLAB-CFE"      if pid == BENCHLAB_CFE_PRODUCT_ID else
+        "BENCHLAB-2"      if pid == BENCHLAB_BL2_PRODUCT_ID else
         "BENCHLAB ORIGINAL" if pid == BENCHLAB_ORIGINAL_PRODUCT_ID else
         f"Unknown (0x{pid:02X})"
     )
@@ -123,7 +123,7 @@ def connect(port: str = None) -> tuple:
 def cmd_device_info(ser, product_id) -> None:
     _header("DEVICE INFO")
     from benchlab_pycore.core import read_device, read_uid, ping, read_name
-    from benchlab_pycore.core import BENCHLAB_CFE_PRODUCT_ID, BENCHLAB_ORIGINAL_PRODUCT_ID
+    from benchlab_pycore.core import BENCHLAB_BL2_PRODUCT_ID, BENCHLAB_ORIGINAL_PRODUCT_ID
 
     ok = ping(ser)
     print(f"  Ping          : {'OK' if ok else 'FAILED'}")
@@ -131,7 +131,7 @@ def cmd_device_info(ser, product_id) -> None:
     info = read_device(ser)
     if info:
         variant = (
-            "BENCHLAB-CFE"      if info['ProductId'] == BENCHLAB_CFE_PRODUCT_ID else
+            "BENCHLAB-2"      if info['ProductId'] == BENCHLAB_BL2_PRODUCT_ID else
             "BENCHLAB ORIGINAL" if info['ProductId'] == BENCHLAB_ORIGINAL_PRODUCT_ID else
             f"Unknown (0x{info['ProductId']:02X})"
         )

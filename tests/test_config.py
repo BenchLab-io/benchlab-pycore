@@ -30,7 +30,7 @@ from benchlab_pycore.core import (
     RGBConfigStruct,
     CalibrationValueStruct,
     CalibrationStruct,
-    CalibrationStructCFE,
+    CalibrationStructBL2,
     # config constants
     FAN_PROFILE_NUM,
     RGB_PROFILE_NUM,

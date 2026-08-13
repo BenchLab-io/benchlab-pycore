@@ -54,7 +54,7 @@ import time
 
 from .structures import (
     BENCHLAB_CMD,
-    BENCHLAB_CFE_PRODUCT_ID,
+    BENCHLAB_BL2_PRODUCT_ID,
     BENCHLAB_ORIGINAL_PRODUCT_ID,
     FAN_PROFILE_NUM,
     FAN_NUM,
@@ -67,7 +67,7 @@ from .structures import (
     FanConfigStruct,
     RGBConfigStruct,
     CalibrationStruct,
-    CalibrationStructCFE,
+    CalibrationStructBL2,
 )
 from .serial_io import read_uart
 
@@ -427,7 +427,7 @@ def write_rgb_profile(
 def read_calibration(
     ser: serial.Serial,
     product_id: Optional[int] = None,
-) -> Optional[Union[CalibrationStruct, CalibrationStructCFE]]:
+) -> Optional[Union[CalibrationStruct, CalibrationStructBL2]]:
     """Read the full calibration table from the device.
 
     Mirrors ``UART_CMD_READ_CALIBRATION`` (single-byte command).
@@ -435,11 +435,11 @@ def read_calibration(
     Args:
         ser:        Open serial connection to the device.
         product_id: Product ID to select the correct calibration structure.
-                    Use ``BENCHLAB_CFE_PRODUCT_ID`` for CFE devices, or
+                    Use ``BENCHLAB_BL2_PRODUCT_ID`` for BL2 devices, or
                     ``BENCHLAB_ORIGINAL_PRODUCT_ID`` / None for ORIGINAL.
 
     Returns:
-        :class:`CalibrationStructCFE` for CFE devices,
+        :class:`CalibrationStructBL2` for BL2 devices,
         :class:`CalibrationStruct` for ORIGINAL devices,
         or None on failure.
 
@@ -448,8 +448,8 @@ def read_calibration(
         >>> cal = read_calibration(ser)
         >>> print(cal.Entries[0].Offset, cal.Entries[0].Scale)
     """
-    if product_id == BENCHLAB_CFE_PRODUCT_ID:
-        struct_type = CalibrationStructCFE
+    if product_id == BENCHLAB_BL2_PRODUCT_ID:
+        struct_type = CalibrationStructBL2
     else:
         struct_type = CalibrationStruct
 
@@ -484,7 +484,7 @@ def write_calibration_chunk(
         offset:     Byte offset into the calibration struct.
         chunk:      Raw bytes to write starting at *offset*.
         product_id: Product ID used to determine the correct struct size for
-                    bounds checking. Use ``BENCHLAB_CFE_PRODUCT_ID`` for CFE
+                    bounds checking. Use ``BENCHLAB_BL2_PRODUCT_ID`` for BL2
                     devices, or None for ORIGINAL.
 
     Returns:
@@ -494,8 +494,8 @@ def write_calibration_chunk(
         ValueError: If *offset* + ``len(chunk)`` exceeds the struct size,
                     or if *offset* > 255 (firmware uses a single byte).
     """
-    if product_id == BENCHLAB_CFE_PRODUCT_ID:
-        cal_size = sizeof(CalibrationStructCFE)
+    if product_id == BENCHLAB_BL2_PRODUCT_ID:
+        cal_size = sizeof(CalibrationStructBL2)
     else:
         cal_size = sizeof(CalibrationStruct)
 
@@ -513,7 +513,7 @@ def write_calibration_chunk(
 
 def write_calibration(
     ser: serial.Serial,
-    calibration: Union[CalibrationStruct, CalibrationStructCFE],
+    calibration: Union[CalibrationStruct, CalibrationStructBL2],
     chunk_size: int = _CDC_MAX_WRITE - 2,
     product_id: Optional[int] = None,
 ) -> bool:
@@ -526,7 +526,7 @@ def write_calibration(
     Args:
         ser:         Open serial connection to the device.
         calibration: Populated :class:`CalibrationStruct` or
-                     :class:`CalibrationStructCFE` to write.
+                     :class:`CalibrationStructBL2` to write.
         chunk_size:  Max payload bytes per packet (default: 62).
         product_id:  Product ID forwarded to ``write_calibration_chunk`` for
                      bounds checking.

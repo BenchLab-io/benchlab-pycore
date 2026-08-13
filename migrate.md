@@ -6,7 +6,7 @@ This guide covers breaking changes and new features introduced in each version.
 
 ## Migrating to v0.4.0
 
-v0.4.0 adds full device configuration support — fan profiles, RGB profiles, calibration, and config persistence — along with struct corrections derived from the firmware headers of both ORIGINAL and CFE devices.
+v0.4.0 adds full device configuration support — fan profiles, RGB profiles, calibration, and config persistence — along with struct corrections derived from the firmware headers of both ORIGINAL and BL2 devices.
 
 ### New in v0.4.0
 
@@ -41,7 +41,7 @@ from benchlab_pycore.core import (
 #### CalibrationStruct for both variants
 
 ```python
-from benchlab_pycore.core import CalibrationStruct, CalibrationStructCFE, CalibrationValueStruct
+from benchlab_pycore.core import CalibrationStruct, CalibrationStructBL2, CalibrationValueStruct
 ```
 
 #### Interactive configuration tool
@@ -66,7 +66,7 @@ python tests/test_device.py --destructive  # write tests with confirmation promp
 
 ## Migrating to v0.3.0
 
-v0.3.0 added multi-variant device support for ORIGINAL and CFE devices.
+v0.3.0 added multi-variant device support for ORIGINAL and BL2 devices.
 
 ### Breaking Changes
 
@@ -82,10 +82,10 @@ from benchlab_pycore.core import SensorStructOriginal
 
 ### New in v0.3.0
 
-- `SensorStructCFE` for CFE devices (23 power sensors, 8 temperature sensors)
+- `SensorStructBL2` for BL2 devices (23 power sensors, 8 temperature sensors)
 - `translate_sensor_struct()` auto-detects variant from struct type or `product_id`
 - `read_sensors(ser, product_id=...)` selects the correct struct for the connected device
-- Variant-specific constants: `BENCHLAB_CFE_PRODUCT_ID`, `SENSOR_POWER_NUM_CFE`, etc.
+- Variant-specific constants: `BENCHLAB_BL2_PRODUCT_ID`, `SENSOR_POWER_NUM_BL2`, etc.
 
 ---
 
@@ -94,7 +94,7 @@ from benchlab_pycore.core import SensorStructOriginal
 | Version | Key Changes |
 |---------|-------------|
 | v0.4.0 | Full config API; corrected FanConfigStruct, RGBConfigStruct, CalibrationStruct; enums; interactive tool; safer test script |
-| v0.3.0 | CFE multi-variant support; SensorStructOriginal / SensorStructCFE; translate dispatcher |
+| v0.3.0 | BL2 multi-variant support; SensorStructOriginal / SensorStructBL2; translate dispatcher |
 
 ## Support
 
