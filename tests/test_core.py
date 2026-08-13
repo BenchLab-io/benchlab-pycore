@@ -15,14 +15,14 @@ from benchlab_pycore.core import (
     read_uid,
     translate_sensor_struct,
     translate_sensor_struct_original,
-    translate_sensor_struct_cfe,
+    translate_sensor_struct_bl2,
     format_temp,
     format_chip_temp,
     VendorDataStruct,
     PowerSensor,
     FanSensor,
     SensorStructOriginal,
-    SensorStructCFE,
+    SensorStructBL2,
     BENCHLAB_CMD,
     # ORIGINAL variant constants
     SENSOR_VIN_NUM_ORIGINAL,
@@ -31,13 +31,13 @@ from benchlab_pycore.core import (
     SENSOR_POWER_NAMES_ORIGINAL,
     SENSOR_TS_NAMES_ORIGINAL,
     BENCHLAB_ORIGINAL_PRODUCT_ID,
-    # CFE variant constants
-    SENSOR_VIN_NUM_CFE,
-    SENSOR_POWER_NUM_CFE,
-    SENSOR_TS_NUM_CFE,
-    SENSOR_POWER_NAMES_CFE,
-    SENSOR_TS_NAMES_CFE,
-    BENCHLAB_CFE_PRODUCT_ID,
+    # BL2 variant constants
+    SENSOR_VIN_NUM_BL2,
+    SENSOR_POWER_NUM_BL2,
+    SENSOR_TS_NUM_BL2,
+    SENSOR_POWER_NAMES_BL2,
+    SENSOR_TS_NAMES_BL2,
+    BENCHLAB_BL2_PRODUCT_ID,
 )
 
 
@@ -55,7 +55,7 @@ def test_imports():
     assert callable(read_device)
     assert callable(translate_sensor_struct)
     assert callable(translate_sensor_struct_original)
-    assert callable(translate_sensor_struct_cfe)
+    assert callable(translate_sensor_struct_bl2)
     assert callable(format_temp)
     assert callable(format_chip_temp)
     
@@ -64,7 +64,7 @@ def test_imports():
     assert isinstance(PowerSensor(), Structure)
     assert isinstance(FanSensor(), Structure)
     assert isinstance(SensorStructOriginal(), Structure)
-    assert isinstance(SensorStructCFE(), Structure)
+    assert isinstance(SensorStructBL2(), Structure)
 
 
 # -----------------------
@@ -97,22 +97,16 @@ def test_get_benchlab_ports_serial_exception(mock_comports):
         get_benchlab_ports()
 
 
-@patch("benchlab_pycore.core.serial_io.serial.tools.list_ports.comports")
+@patch("benchlab_pycore.core.serial_io.get_benchlab_ports")
+@patch("benchlab_pycore.core.serial_io.read_device")
+@patch("benchlab_pycore.core.serial_io.read_uid")
 @patch("benchlab_pycore.core.serial_io.serial.Serial")
-def test_find_benchlab_devices_success(mock_serial, mock_comports):
+def test_find_benchlab_devices_success(mock_serial, mock_read_uid, mock_read_device, mock_get_ports):
     """Test find_benchlab_devices with mock devices."""
-    # Mock port objects
-    mock_port = Mock()
-    mock_port.device = "COM3"
-    mock_port.hwid = "USB VID:PID=0483:5740"
-    
-    mock_comports.return_value = [("COM3", "desc", "USB VID:PID=0483:5740")]
-    
-    # Mock serial connection
-    mock_ser = Mock()
-    mock_ser.readline.side_effect = [b"123456789ABC\n", b"1.0\n"]
-    mock_serial.return_value = mock_ser
-    
+    mock_get_ports.return_value = [{"port": "COM3"}]
+    mock_read_device.return_value = {"FwVersion": "1.0"}
+    mock_read_uid.return_value = "123456789ABC"
+
     result = find_benchlab_devices()
     assert len(result) == 1
     assert result[0]["port"] == "COM3"
@@ -120,13 +114,13 @@ def test_find_benchlab_devices_success(mock_serial, mock_comports):
     assert result[0]["fw"] == "1.0"
 
 
-@patch("benchlab_pycore.core.serial_io.serial.tools.list_ports.comports")
+@patch("benchlab_pycore.core.serial_io.get_benchlab_ports")
 @patch("benchlab_pycore.core.serial_io.serial.Serial")
-def test_find_benchlab_devices_serial_failure(mock_serial, mock_comports):
+def test_find_benchlab_devices_serial_failure(mock_serial, mock_get_ports):
     """Test find_benchlab_devices with serial connection failure."""
-    mock_comports.return_value = [("COM3", "desc", "USB VID:PID=0483:5740")]
+    mock_get_ports.return_value = [{"port": "COM3"}]
     mock_serial.side_effect = serial.SerialException("Cannot open port")
-    
+
     result = find_benchlab_devices()
     assert len(result) == 1
     assert result[0]["port"] == "COM3"
@@ -175,14 +169,14 @@ def test_read_sensors_original_success(mock_read_uart):
 
 
 @patch("benchlab_pycore.core.serial_io.read_uart")
-def test_read_sensors_cfe_success(mock_read_uart):
-    """Test read_sensors with CFE product_id returns SensorStructCFE."""
-    mock_read_uart.return_value = bytes([0] * sizeof(SensorStructCFE))
+def test_read_sensors_bl2_success(mock_read_uart):
+    """Test read_sensors with BL2 product_id returns SensorStructBL2."""
+    mock_read_uart.return_value = bytes([0] * sizeof(SensorStructBL2))
     
     mock_ser = Mock()
-    result = read_sensors(mock_ser, product_id=BENCHLAB_CFE_PRODUCT_ID)
+    result = read_sensors(mock_ser, product_id=BENCHLAB_BL2_PRODUCT_ID)
     
-    assert isinstance(result, SensorStructCFE)
+    assert isinstance(result, SensorStructBL2)
 
 
 @patch("benchlab_pycore.core.serial_io.read_uart")
@@ -246,19 +240,19 @@ def test_original_variant_constants():
     assert SENSOR_TS_NAMES_ORIGINAL[0] == "TS_1"
 
 
-def test_cfe_variant_constants():
-    """Test that CFE variant constants are correctly defined."""
-    assert BENCHLAB_CFE_PRODUCT_ID == 0x11
-    assert SENSOR_VIN_NUM_CFE == 13
-    assert SENSOR_POWER_NUM_CFE == 23
-    assert SENSOR_TS_NUM_CFE == 8
-    assert len(SENSOR_POWER_NAMES_CFE) == 23
-    assert len(SENSOR_TS_NAMES_CFE) == 8
-    assert SENSOR_POWER_NAMES_CFE[0] == "EPS1"
-    assert SENSOR_POWER_NAMES_CFE[11] == "HPWR1_W1"
-    assert SENSOR_POWER_NAMES_CFE[22] == "HPWR2_W6"
-    assert SENSOR_TS_NAMES_CFE[4] == "TS_HPWR1_IN"
-    assert SENSOR_TS_NAMES_CFE[7] == "TS_HPWR2_OUT"
+def test_bl2_variant_constants():
+    """Test that BL2 variant constants are correctly defined."""
+    assert BENCHLAB_BL2_PRODUCT_ID == 0x11
+    assert SENSOR_VIN_NUM_BL2 == 13
+    assert SENSOR_POWER_NUM_BL2 == 23
+    assert SENSOR_TS_NUM_BL2 == 8
+    assert len(SENSOR_POWER_NAMES_BL2) == 23
+    assert len(SENSOR_TS_NAMES_BL2) == 8
+    assert SENSOR_POWER_NAMES_BL2[0] == "EPS1"
+    assert SENSOR_POWER_NAMES_BL2[11] == "HPWR1_W1"
+    assert SENSOR_POWER_NAMES_BL2[22] == "HPWR2_W6"
+    assert SENSOR_TS_NAMES_BL2[4] == "TS_HPWR1_IN"
+    assert SENSOR_TS_NAMES_BL2[7] == "TS_HPWR2_OUT"
 
 
 # -----------------------
@@ -273,18 +267,18 @@ def test_original_structure():
     assert len(s.Vin) == SENSOR_VIN_NUM_ORIGINAL
 
 
-def test_cfe_structure():
-    """Test that CFE structure is properly defined."""
-    s = SensorStructCFE()
-    assert len(s.PowerReadings) == SENSOR_POWER_NUM_CFE
-    assert len(s.Ts) == SENSOR_TS_NUM_CFE
+def test_bl2_structure():
+    """Test that BL2 structure is properly defined."""
+    s = SensorStructBL2()
+    assert len(s.PowerReadings) == SENSOR_POWER_NUM_BL2
+    assert len(s.Ts) == SENSOR_TS_NUM_BL2
     assert len(s.Fans) == 9
-    assert len(s.Vin) == SENSOR_VIN_NUM_CFE
+    assert len(s.Vin) == SENSOR_VIN_NUM_BL2
 
 
-def test_cfe_structure_larger_than_original():
-    """Test that CFE structure is larger than ORIGINAL due to more sensors."""
-    assert sizeof(SensorStructCFE) > sizeof(SensorStructOriginal)
+def test_bl2_structure_larger_than_original():
+    """Test that BL2 structure is larger than ORIGINAL due to more sensors."""
+    assert sizeof(SensorStructBL2) > sizeof(SensorStructOriginal)
 
 
 # -----------------------
@@ -350,20 +344,20 @@ def test_original_sensor_translation():
 
 
 # -----------------------
-# Test CFE variant translation
+# Test BL2 variant translation
 # -----------------------
-def test_cfe_sensor_translation():
-    """Test translate_sensor_struct_cfe with comprehensive sensor data."""
-    s = SensorStructCFE()
+def test_bl2_sensor_translation():
+    """Test translate_sensor_struct_bl2 with comprehensive sensor data."""
+    s = SensorStructBL2()
     
     # Set up power readings (23 sensors)
-    for i in range(SENSOR_POWER_NUM_CFE):
+    for i in range(SENSOR_POWER_NUM_BL2):
         s.PowerReadings[i].Voltage = 12000
         s.PowerReadings[i].Current = 5000
         s.PowerReadings[i].Power = 60000
     
     # Set up VIN readings
-    for i in range(SENSOR_VIN_NUM_CFE):
+    for i in range(SENSOR_VIN_NUM_BL2):
         s.Vin[i] = (i + 1) * 1000
     
     # Set up other values
@@ -374,7 +368,7 @@ def test_cfe_sensor_translation():
     s.Hum = 450
     
     # Set up 8 temperature sensors
-    for i in range(SENSOR_TS_NUM_CFE):
+    for i in range(SENSOR_TS_NUM_BL2):
         s.Ts[i] = (i + 1) * 100
     
     # Set up fans
@@ -385,7 +379,7 @@ def test_cfe_sensor_translation():
     
     s.FanExtDuty = 50
     
-    translated = translate_sensor_struct_cfe(s)
+    translated = translate_sensor_struct_bl2(s)
     
     # Check power calculations
     assert translated["SYS_Power"] == 660.0
@@ -397,7 +391,7 @@ def test_cfe_sensor_translation():
     assert "EPS1_Voltage" in translated
     assert "HPWR2_Power" in translated
     
-    # Check CFE-specific power sensor names
+    # Check BL2-specific power sensor names
     assert "HPWR1_W1_Voltage" in translated
     assert "HPWR2_W6_Power" in translated
     
@@ -434,24 +428,24 @@ def test_translate_sensor_struct_dispatcher_original():
     assert "TS_1" in translated
 
 
-def test_translate_sensor_struct_dispatcher_cfe():
-    """Test that dispatcher routes to CFE translator correctly."""
-    s = SensorStructCFE()
-    for i in range(SENSOR_POWER_NUM_CFE):
+def test_translate_sensor_struct_dispatcher_bl2():
+    """Test that dispatcher routes to BL2 translator correctly."""
+    s = SensorStructBL2()
+    for i in range(SENSOR_POWER_NUM_BL2):
         s.PowerReadings[i].Power = 10000
     s.Tchip = 30
     s.Tamb = 200
     s.Hum = 500
-    for i in range(SENSOR_TS_NUM_CFE):
+    for i in range(SENSOR_TS_NUM_BL2):
         s.Ts[i] = (i + 1) * 100
     
-    # Should use CFE translator by type detection
+    # Should use BL2 translator by type detection
     translated = translate_sensor_struct(s)
     assert "HPWR1_W1_Power" in translated
     assert "TS_HPWR1_IN" in translated
     
-    # Should also use CFE translator with explicit product_id
-    translated2 = translate_sensor_struct(s, product_id=BENCHLAB_CFE_PRODUCT_ID)
+    # Should also use BL2 translator with explicit product_id
+    translated2 = translate_sensor_struct(s, product_id=BENCHLAB_BL2_PRODUCT_ID)
     assert "HPWR2_W6_Power" in translated2
 
 

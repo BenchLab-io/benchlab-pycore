@@ -1,12 +1,85 @@
-# Migration Guide to benchlab-pycore v0.4.0
+# Migration Guide to benchlab-pycore v0.5.0
 
 This guide covers breaking changes and new features introduced in each version.
 
 ---
 
+## Migrating to v0.5.0
+
+v0.5.0 renames the BL2 variant's identifiers from `CFE` to `BL2` to match the
+final SKU name (`BENCHLAB-2`, not `BENCHLAB-CFE`), and fixes several
+correctness bugs found in a full review of the protocol, config I/O, and test
+suite.
+
+### Breaking Changes
+
+#### CFE identifiers renamed to BL2
+
+Every `CFE`/`cfe` identifier is renamed. The device itself was always the
+same hardware — only the name changes:
+
+```python
+# Before
+from benchlab_pycore.core import (
+    SensorStructCFE, CalibrationStructCFE,
+    BENCHLAB_CFE_PRODUCT_ID,
+    translate_sensor_struct_cfe,
+    SENSOR_VIN_NUM_CFE, SENSOR_POWER_NUM_CFE, SENSOR_TS_NUM_CFE,
+    SENSOR_POWER_NAMES_CFE, SENSOR_TS_NAMES_CFE,
+)
+
+# After
+from benchlab_pycore.core import (
+    SensorStructBL2, CalibrationStructBL2,
+    BENCHLAB_BL2_PRODUCT_ID,
+    translate_sensor_struct_bl2,
+    SENSOR_VIN_NUM_BL2, SENSOR_POWER_NUM_BL2, SENSOR_TS_NUM_BL2,
+    SENSOR_POWER_NAMES_BL2, SENSOR_TS_NAMES_BL2,
+)
+```
+
+The product-name string reported in logs and docstrings also changed from
+`"BENCHLAB-CFE"` to `"BENCHLAB-2"`.
+
+#### write_name() raises instead of silently truncating
+
+Previously, a name longer than 30 UTF-8 bytes was silently truncated (and
+could split a multi-byte character) while still returning `True`. It now
+raises `ValueError` so callers can't mistake a truncated write for success:
+
+```python
+# Before
+write_name(ser, very_long_name)  # -> True, but device got a truncated name
+
+# After
+write_name(ser, very_long_name)  # -> raises ValueError
+```
+
+#### find_benchlab_devices() dict key and protocol fix
+
+`find_benchlab_devices()` previously spoke a nonstandard protocol and
+returned firmware version under the key `"firmware"` despite its docstring
+promising `"fw"`. It now uses the same UART protocol as the rest of the
+library and returns `"fw"` as documented:
+
+```python
+devices = find_benchlab_devices()
+devices[0]["fw"]  # now populated correctly; "firmware" key no longer exists
+```
+
+#### load_calibration() / store_calibration() cal_id documentation corrected
+
+The docstrings previously had `cal_id` 0/1 backwards relative to the actual
+`CAL_FACTORY=0` / `CAL_USER=1` constants. The code's behavior was always
+correct — only the documented examples were wrong and have been fixed. If
+you copied the docstring's (incorrect) example, double-check which slot
+you're actually targeting.
+
+---
+
 ## Migrating to v0.4.0
 
-v0.4.0 adds full device configuration support — fan profiles, RGB profiles, calibration, and config persistence — along with struct corrections derived from the firmware headers of both ORIGINAL and CFE devices.
+v0.4.0 adds full device configuration support — fan profiles, RGB profiles, calibration, and config persistence — along with struct corrections derived from the firmware headers of both ORIGINAL and BL2 devices.
 
 ### New in v0.4.0
 
@@ -41,7 +114,7 @@ from benchlab_pycore.core import (
 #### CalibrationStruct for both variants
 
 ```python
-from benchlab_pycore.core import CalibrationStruct, CalibrationStructCFE, CalibrationValueStruct
+from benchlab_pycore.core import CalibrationStruct, CalibrationStructBL2, CalibrationValueStruct
 ```
 
 #### Interactive configuration tool
@@ -66,7 +139,7 @@ python tests/test_device.py --destructive  # write tests with confirmation promp
 
 ## Migrating to v0.3.0
 
-v0.3.0 added multi-variant device support for ORIGINAL and CFE devices.
+v0.3.0 added multi-variant device support for ORIGINAL and BL2 devices.
 
 ### Breaking Changes
 
@@ -82,10 +155,10 @@ from benchlab_pycore.core import SensorStructOriginal
 
 ### New in v0.3.0
 
-- `SensorStructCFE` for CFE devices (23 power sensors, 8 temperature sensors)
+- `SensorStructBL2` for BL2 devices (23 power sensors, 8 temperature sensors)
 - `translate_sensor_struct()` auto-detects variant from struct type or `product_id`
 - `read_sensors(ser, product_id=...)` selects the correct struct for the connected device
-- Variant-specific constants: `BENCHLAB_CFE_PRODUCT_ID`, `SENSOR_POWER_NUM_CFE`, etc.
+- Variant-specific constants: `BENCHLAB_BL2_PRODUCT_ID`, `SENSOR_POWER_NUM_BL2`, etc.
 
 ---
 
@@ -93,8 +166,9 @@ from benchlab_pycore.core import SensorStructOriginal
 
 | Version | Key Changes |
 |---------|-------------|
+| v0.5.0 | CFE -> BL2 rename (matches final BENCHLAB-2 SKU name); write_name() raises on truncation instead of silently succeeding; find_benchlab_devices() protocol/key fix; calibration docstring corrections |
 | v0.4.0 | Full config API; corrected FanConfigStruct, RGBConfigStruct, CalibrationStruct; enums; interactive tool; safer test script |
-| v0.3.0 | CFE multi-variant support; SensorStructOriginal / SensorStructCFE; translate dispatcher |
+| v0.3.0 | BL2 multi-variant support; SensorStructOriginal / SensorStructBL2; translate dispatcher |
 
 ## Support
 

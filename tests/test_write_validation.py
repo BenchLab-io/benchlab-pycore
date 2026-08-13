@@ -44,6 +44,11 @@ import argparse
 from typing import Optional, Dict, Any, Tuple
 from dataclasses import dataclass, asdict
 
+# Ensure box-drawing/checkmark characters print correctly on Windows consoles
+# whose default codepage (e.g. cp1252) can't encode them.
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8")
+
 # =============================================================================
 # Output Formatting
 # =============================================================================
@@ -267,10 +272,10 @@ def restore_backup(ser: serial.Serial, backup: DeviceBackup, restore_calibration
     # Restore calibration (if requested and available)
     if restore_calibration and backup.calibration is not None:
         # Reconstruct calibration struct from bytes
-        from benchlab_pycore.core import CalibrationStruct, CalibrationStructCFE, BENCHLAB_CFE_PRODUCT_ID
+        from benchlab_pycore.core import CalibrationStruct, CalibrationStructBL2, BENCHLAB_BL2_PRODUCT_ID
         
-        if backup.product_id == BENCHLAB_CFE_PRODUCT_ID:
-            cal = CalibrationStructCFE.from_buffer_copy(backup.calibration)
+        if backup.product_id == BENCHLAB_BL2_PRODUCT_ID:
+            cal = CalibrationStructBL2.from_buffer_copy(backup.calibration)
         else:
             cal = CalibrationStruct.from_buffer_copy(backup.calibration)
         
@@ -602,8 +607,8 @@ def test_calibration_write(ser: serial.Serial, backup: DeviceBackup, dry_run: bo
     """
     from benchlab_pycore.core import (
         read_calibration, write_calibration,
-        CalibrationStruct, CalibrationStructCFE,
-        BENCHLAB_CFE_PRODUCT_ID
+        CalibrationStruct, CalibrationStructBL2,
+        BENCHLAB_BL2_PRODUCT_ID
     )
     from ctypes import sizeof
     
@@ -622,8 +627,8 @@ def test_calibration_write(ser: serial.Serial, backup: DeviceBackup, dry_run: bo
         return True
     
     # Reconstruct calibration struct from backup
-    if backup.product_id == BENCHLAB_CFE_PRODUCT_ID:
-        cal = CalibrationStructCFE.from_buffer_copy(backup.calibration)
+    if backup.product_id == BENCHLAB_BL2_PRODUCT_ID:
+        cal = CalibrationStructBL2.from_buffer_copy(backup.calibration)
     else:
         cal = CalibrationStruct.from_buffer_copy(backup.calibration)
     
@@ -763,7 +768,7 @@ def run_tests(args: argparse.Namespace) -> bool:
             return False
         
         product_id = device_info['ProductId']
-        variant = "CFE" if product_id == 0x11 else "ORIGINAL"
+        variant = "BL2" if product_id == 0x11 else "ORIGINAL"
         
         print_success(f"Connected to device on {port}")
         print_info(f"  Variant: {variant} (Product ID: 0x{product_id:02X})")

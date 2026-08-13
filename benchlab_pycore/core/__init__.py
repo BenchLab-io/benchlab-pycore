@@ -12,7 +12,7 @@ from .serial_io import (
 from .sensor_translation import (
     translate_sensor_struct,
     translate_sensor_struct_original,
-    translate_sensor_struct_cfe,
+    translate_sensor_struct_bl2,
 )
 from .config_io import (
     ping,
@@ -48,7 +48,7 @@ from .structures import (
     RGBDirection,
     CalibrationValueStruct,
     CalibrationStruct,
-    CalibrationStructCFE,
+    CalibrationStructBL2,
     # Config constants
     FAN_PROFILE_NUM,
     RGB_PROFILE_NUM,
@@ -66,15 +66,15 @@ from .structures import (
     SENSOR_TS_NUM_ORIGINAL,
     SENSOR_POWER_NAMES_ORIGINAL,
     SENSOR_TS_NAMES_ORIGINAL,
-    # CFE variant
-    SensorStructCFE,
-    BENCHLAB_CFE_PRODUCT_ID,
-    BENCHLAB_CFE_FIRMWARE_VERSION,
-    SENSOR_VIN_NUM_CFE,
-    SENSOR_POWER_NUM_CFE,
-    SENSOR_TS_NUM_CFE,
-    SENSOR_POWER_NAMES_CFE,
-    SENSOR_TS_NAMES_CFE,
+    # BL2 variant
+    SensorStructBL2,
+    BENCHLAB_BL2_PRODUCT_ID,
+    BENCHLAB_BL2_FIRMWARE_VERSION,
+    SENSOR_VIN_NUM_BL2,
+    SENSOR_POWER_NUM_BL2,
+    SENSOR_TS_NUM_BL2,
+    SENSOR_POWER_NAMES_BL2,
+    SENSOR_TS_NAMES_BL2,
 )
 from .utils import format_temp, format_chip_temp
 
@@ -90,7 +90,7 @@ __all__ = [
     # sensor_translation
     "translate_sensor_struct",
     "translate_sensor_struct_original",
-    "translate_sensor_struct_cfe",
+    "translate_sensor_struct_bl2",
     # config_io
     "ping",
     "read_name",
@@ -123,7 +123,7 @@ __all__ = [
     "RGBDirection",
     "CalibrationValueStruct",
     "CalibrationStruct",
-    "CalibrationStructCFE",
+    "CalibrationStructBL2",
     # Config constants
     "FAN_PROFILE_NUM",
     "RGB_PROFILE_NUM",
@@ -141,15 +141,15 @@ __all__ = [
     "SENSOR_TS_NUM_ORIGINAL",
     "SENSOR_POWER_NAMES_ORIGINAL",
     "SENSOR_TS_NAMES_ORIGINAL",
-    # CFE variant
-    "SensorStructCFE",
-    "BENCHLAB_CFE_PRODUCT_ID",
-    "BENCHLAB_CFE_FIRMWARE_VERSION",
-    "SENSOR_VIN_NUM_CFE",
-    "SENSOR_POWER_NUM_CFE",
-    "SENSOR_TS_NUM_CFE",
-    "SENSOR_POWER_NAMES_CFE",
-    "SENSOR_TS_NAMES_CFE",
+    # BL2 variant
+    "SensorStructBL2",
+    "BENCHLAB_BL2_PRODUCT_ID",
+    "BENCHLAB_BL2_FIRMWARE_VERSION",
+    "SENSOR_VIN_NUM_BL2",
+    "SENSOR_POWER_NUM_BL2",
+    "SENSOR_TS_NUM_BL2",
+    "SENSOR_POWER_NAMES_BL2",
+    "SENSOR_TS_NAMES_BL2",
     # utils
     "format_temp",
     "format_chip_temp",

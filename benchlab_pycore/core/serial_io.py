@@ -7,7 +7,7 @@ discovery, vendor information reading, sensor data acquisition, and UID reading.
 
 Supports multiple device variants:
     - ORIGINAL: BENCHLAB Original (Product ID: 0x10)
-    - CFE: BENCHLAB-CFE (Product ID: 0x11)
+    - BL2: BENCHLAB-2 (Product ID: 0x11)
 
 Example:
     >>> from benchlab_pycore.core import get_fleet_info, read_sensors
@@ -32,10 +32,10 @@ from typing import List, Dict, Optional, Union
 from benchlab_pycore.core.structures import (
     VendorDataStruct,
     SensorStructOriginal,
-    SensorStructCFE,
+    SensorStructBL2,
     BENCHLAB_CMD,
     BENCHLAB_ORIGINAL_PRODUCT_ID,
-    BENCHLAB_CFE_PRODUCT_ID,
+    BENCHLAB_BL2_PRODUCT_ID,
 )
 
 # --- Logger setup ---
@@ -102,30 +102,21 @@ def find_benchlab_devices() -> List[Dict[str, str]]:
         >>> print(devices)
         [{'port': 'COM3', 'uid': '123456789ABC', 'fw': '1.0'}, ...]
     """
-    try:
-        comports = serial.tools.list_ports.comports()
-    except serial.SerialException as e:
-        logger.error("Failed to enumerate serial ports: %s", e)
-        raise
-
     devices = []
-    for port, desc, hwid in comports:
-        if _BENCHLAB_VID_PID not in hwid.upper():
-            continue
+    for port_info in get_benchlab_ports():
+        port = port_info["port"]
+        uid, fw = "?", "?"
         try:
-            ser = serial.Serial(port, baudrate=115200, timeout=1)
-            ser.write(b"i\n")
-            uid = ser.readline().decode(errors="ignore").strip()
-            fw = ser.readline().decode(errors="ignore").strip()
-            ser.close()
+            with serial.Serial(port, baudrate=115200, timeout=1) as ser:
+                device_info = read_device(ser)
+                uid = read_uid(ser) or "?"
+                fw = str(device_info.get("FwVersion")) if device_info else "?"
             logger.info("Found device on %s: UID=%s, FW=%s", port, uid, fw)
         except serial.SerialException as e:
-            uid, fw = "?", "?"
             logger.warning("Failed to open serial port %s: %s", port, e)
         except Exception as e:
-            uid, fw = "?", "?"
             logger.warning("Failed to read device on %s: %s", port, e)
-        devices.append({"port": port, "uid": uid, "firmware": fw})
+        devices.append({"port": port, "uid": uid, "fw": fw})
     return devices
 
 
@@ -168,35 +159,6 @@ def get_fleet_info() -> List[Dict[str, Union[str, int]]]:
         except Exception as e:
             logger.warning("Failed to get device info from %s: %s", port, e)
     return fleet
-
-
-def open_serial_connection(port: Optional[str] = None) -> Optional[serial.Serial]:
-    """Open and return a serial connection to the given port.
-
-    Args:
-        port (Optional[str]): The COM port to open. If None, returns None.
-
-    Returns:
-        Optional[serial.Serial]: Opened serial connection or None if failed.
-
-    Raises:
-        serial.SerialException: If the port cannot be opened.
-
-    Example:
-        >>> ser = open_serial_connection('COM3')
-        >>> if ser:
-        >>>     # Use the connection
-        >>>     ser.close()
-    """
-    if not port:
-        return None
-    try:
-        ser = serial.Serial(port, baudrate=115200, timeout=1)
-        logger.info("Opened serial port %s", port)
-        return ser
-    except serial.SerialException as e:
-        logger.error("Could not open port %s: %s", port, e)
-        return None
 
 
 # --- UART helpers ---
@@ -276,19 +238,19 @@ def read_device(ser: serial.Serial) -> Optional[Dict[str, int]]:
 def read_sensors(
     ser: serial.Serial,
     product_id: Optional[int] = None
-) -> Optional[Union[SensorStructOriginal, SensorStructCFE]]:
+) -> Optional[Union[SensorStructOriginal, SensorStructBL2]]:
     """Read all sensors from the device.
 
     Args:
         ser (serial.Serial): Opened serial connection to the device.
         product_id (Optional[int]): Product ID to determine which sensor structure
-                                    to use. Use BENCHLAB_CFE_PRODUCT_ID for CFE devices,
+                                    to use. Use BENCHLAB_BL2_PRODUCT_ID for BL2 devices,
                                     or BENCHLAB_ORIGINAL_PRODUCT_ID (or None) for original.
 
     Returns:
-        Optional[Union[SensorStructOriginal, SensorStructCFE]]: Sensor structure object
+        Optional[Union[SensorStructOriginal, SensorStructBL2]]: Sensor structure object
             containing all sensor data, or None if read failed.
-            - Returns SensorStructCFE for CFE devices (product_id=0x11)
+            - Returns SensorStructBL2 for BL2 devices (product_id=0x11)
             - Returns SensorStructOriginal for original devices (default)
 
     Note:
@@ -297,22 +259,22 @@ def read_sensors(
 
     Example:
         >>> ser = serial.Serial('COM3', 115200)
-        >>> # For CFE device
+        >>> # For BL2 device
         >>> sensors = read_sensors(ser, product_id=0x11)
         >>> if sensors:
         >>>     # Access raw sensor data
         >>>     voltage = sensors.Vin[0]
     """
-    if product_id == BENCHLAB_CFE_PRODUCT_ID:
+    if product_id == BENCHLAB_BL2_PRODUCT_ID:
         buffer = read_uart(
             ser,
             BENCHLAB_CMD.UART_CMD_READ_SENSORS,
-            sizeof(SensorStructCFE)
+            sizeof(SensorStructBL2)
         )
         if buffer is None:
-            logger.warning("Failed to read sensors from BENCHLAB-CFE device")
+            logger.warning("Failed to read sensors from BENCHLAB-2 device")
             return None
-        return SensorStructCFE.from_buffer_copy(buffer)
+        return SensorStructBL2.from_buffer_copy(buffer)
     else:
         buffer = read_uart(
             ser,

@@ -19,17 +19,17 @@ from .structures import (
     SENSOR_TS_NAMES_ORIGINAL,
     SensorStructOriginal,
 
-    # CFE variant constants and structures
-    SENSOR_VIN_NUM_CFE,
-    SENSOR_POWER_NUM_CFE,
-    SENSOR_TS_NUM_CFE,
-    SENSOR_POWER_NAMES_CFE,
-    SENSOR_TS_NAMES_CFE,
-    SensorStructCFE,
+    # BL2 variant constants and structures
+    SENSOR_VIN_NUM_BL2,
+    SENSOR_POWER_NUM_BL2,
+    SENSOR_TS_NUM_BL2,
+    SENSOR_POWER_NAMES_BL2,
+    SENSOR_TS_NAMES_BL2,
+    SensorStructBL2,
 
     # Product IDs for variant detection
     BENCHLAB_ORIGINAL_PRODUCT_ID,
-    BENCHLAB_CFE_PRODUCT_ID,
+    BENCHLAB_BL2_PRODUCT_ID,
 )
 from .utils import format_chip_temp, format_temp
 
@@ -39,7 +39,7 @@ from .utils import format_chip_temp, format_temp
 # =============================================================================
 
 def translate_sensor_struct(
-    sensor_struct: Union[SensorStructOriginal, SensorStructCFE],
+    sensor_struct: Union[SensorStructOriginal, SensorStructBL2],
     product_id: int = None,
 ) -> Dict[str, Any]:
     """Return a flat dict of interpreted sensor values suitable for CSV, graphs, MQTT, etc.
@@ -49,7 +49,7 @@ def translate_sensor_struct(
 
     Args:
         sensor_struct: Raw sensor data from read_sensors(). Can be either
-                      SensorStructOriginal or SensorStructCFE.
+                      SensorStructOriginal or SensorStructBL2.
         product_id: Optional product ID to help with variant detection.
                    If provided, takes precedence over type detection.
 
@@ -65,14 +65,14 @@ def translate_sensor_struct(
         >>>     print(f"CPU Power: {data['CPU_Power']}W")
     """
     # Use product_id for detection if provided
-    if product_id == BENCHLAB_CFE_PRODUCT_ID:
-        return translate_sensor_struct_cfe(sensor_struct)
+    if product_id == BENCHLAB_BL2_PRODUCT_ID:
+        return translate_sensor_struct_bl2(sensor_struct)
     elif product_id == BENCHLAB_ORIGINAL_PRODUCT_ID:
         return translate_sensor_struct_original(sensor_struct)
 
     # Fall back to type-based detection
-    if isinstance(sensor_struct, SensorStructCFE):
-        return translate_sensor_struct_cfe(sensor_struct)
+    if isinstance(sensor_struct, SensorStructBL2):
+        return translate_sensor_struct_bl2(sensor_struct)
 
     return translate_sensor_struct_original(sensor_struct)
 
@@ -141,23 +141,24 @@ def translate_sensor_struct_original(sensor_struct: SensorStructOriginal) -> Dic
 
 
 # =============================================================================
-# CFE Variant Translation
+# BL2 Variant Translation
 # =============================================================================
 
-def translate_sensor_struct_cfe(sensor_struct: SensorStructCFE) -> Dict[str, Any]:
-    """Translate BENCHLAB-CFE device sensor data to human-readable dictionary.
+def translate_sensor_struct_bl2(sensor_struct: SensorStructBL2) -> Dict[str, Any]:
+    """Translate BENCHLAB-2 device sensor data to human-readable dictionary.
 
     Handles:
     - 23 power sensors (12 more than original, with HPWR1_W1-6 and HPWR2_W1-6)
     - 8 temperature sensors (4 more than original, with HPWR1/HPWR2 IN/OUT)
     - 9 fans (same as original)
 
-    SYS_Power is the sum of CPU, GPU, MB, and all HPWR wire sensors
-    (HPWR1_W1-6 at indices 11-16, HPWR2_W1-6 at indices 17-22), giving
-    a complete picture of total system power draw on CFE devices.
+    SYS_Power is the sum of CPU, GPU, and MB power only. The HPWR wire
+    sensors (HPWR1_W1-6 at indices 11-16, HPWR2_W1-6 at indices 17-22)
+    are sub-measurements of HPWR1/HPWR2 and are excluded to avoid
+    double-counting.
 
     Args:
-        sensor_struct: Raw sensor data from CFE device.
+        sensor_struct: Raw sensor data from BL2 device.
 
     Returns:
         Dictionary with translated sensor values.
@@ -183,14 +184,14 @@ def translate_sensor_struct_cfe(sensor_struct: SensorStructCFE) -> Dict[str, Any
     })
 
     # ---- Individual Power Sensor Readings ----
-    for i in range(SENSOR_POWER_NUM_CFE):
-        name = SENSOR_POWER_NAMES_CFE[i]
+    for i in range(SENSOR_POWER_NUM_BL2):
+        name = SENSOR_POWER_NAMES_BL2[i]
         data[f"{name}_Voltage"] = power[i].Voltage / 1000
         data[f"{name}_Current"] = power[i].Current / 1000
         data[f"{name}_Power"] = power[i].Power / 1000
 
     # ---- VIN Sensors ----
-    for i in range(SENSOR_VIN_NUM_CFE):
+    for i in range(SENSOR_VIN_NUM_BL2):
         data[f"VIN_{i}"] = sensor_struct.Vin[i] / 1000
     data["Vdd"] = sensor_struct.Vdd / 1000
     data["Vref"] = sensor_struct.Vref / 1000
@@ -199,8 +200,8 @@ def translate_sensor_struct_cfe(sensor_struct: SensorStructCFE) -> Dict[str, Any
     data["Chip_Temp"] = format_chip_temp(sensor_struct.Tchip)
     data["Ambient_Temp"] = format_temp(sensor_struct.Tamb)
     data["Humidity"] = sensor_struct.Hum / 10
-    for i in range(SENSOR_TS_NUM_CFE):
-        data[SENSOR_TS_NAMES_CFE[i]] = format_temp(sensor_struct.Ts[i])
+    for i in range(SENSOR_TS_NUM_BL2):
+        data[SENSOR_TS_NAMES_BL2[i]] = format_temp(sensor_struct.Ts[i])
 
     # ---- Fan Sensors ----
     for i, f in enumerate(sensor_struct.Fans):

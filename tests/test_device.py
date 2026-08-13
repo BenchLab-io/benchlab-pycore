@@ -83,7 +83,7 @@ def test_device_discovery() -> List[Dict[str, str]]:
         for device in devices:
             print_info(f"  - Port: {device['port']}")
             print_info(f"    UID: {device['uid']}")
-            print_info(f"    Firmware: {device['firmware']}")
+            print_info(f"    Firmware: {device['fw']}")
     except Exception as e:
         print_error(f"Device discovery failed: {e}")
         return []
@@ -140,10 +140,10 @@ def test_vendor_info(ser: serial.Serial) -> tuple:
             
             product_id = vendor_info['ProductId']
             
-            # Check if it's a CFE device
+            # Check if it's a BL2 device
             if product_id == 0x11:
-                print_success("Device is a BENCHLAB-CFE (Product ID: 0x11)")
-                print_info("CFE-specific sensor names will be used for translation")
+                print_success("Device is a BENCHLAB-2 (Product ID: 0x11)")
+                print_info("BL2-specific sensor names will be used for translation")
             elif product_id == 0x10:
                 print_success("Device identification matches original BENCHLAB specifications")
             else:
@@ -291,7 +291,7 @@ def run_comprehensive_test() -> bool:
         # Test 4: UID Reading
         uid_ok = test_uid_reading(ser)
         
-        # Test 5: Sensor Reading (pass product_id for CFE support)
+        # Test 5: Sensor Reading (pass product_id for BL2 support)
         sensor_ok = test_sensor_reading(ser, product_id=product_id)
         
         # Summary
