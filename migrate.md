@@ -1,6 +1,18 @@
-# Migration Guide to benchlab-pycore v0.5.1
+# Migration Guide to benchlab-pycore v0.5.2
 
 This guide covers breaking changes and new features introduced in each version.
+
+---
+
+## Migrating to v0.5.2
+
+v0.5.2 is a non-breaking release. No code changes are required to upgrade.
+
+### New in v0.5.2
+
+Adds automated GitHub Actions workflows for running tests on pull requests
+and publishing releases to PyPI on tagged pushes. No changes to library
+behavior.
 
 ---
 
