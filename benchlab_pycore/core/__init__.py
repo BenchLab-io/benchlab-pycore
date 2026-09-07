@@ -29,6 +29,13 @@ from .config_io import (
     store_calibration,
     send_action,
 )
+from .contract import (
+    Contract,
+    ContractMismatchError,
+    UnknownFirmwareError,
+    available_contracts,
+    contract_for,
+)
 from .structures import (
     # Shared structures
     VendorDataStruct,
@@ -55,6 +62,8 @@ from .structures import (
     CAL_NUM,
     CAL_FACTORY,
     CAL_USER,
+    CalSlot,
+    resolve_cal_slot,
     FRIENDLY_NAME_LEN,
     FAN_CURVE_POINTS,
     # ORIGINAL variant
@@ -130,6 +139,13 @@ __all__ = [
     "CAL_NUM",
     "CAL_FACTORY",
     "CAL_USER",
+    "CalSlot",
+    "resolve_cal_slot",
+    "Contract",
+    "ContractMismatchError",
+    "UnknownFirmwareError",
+    "available_contracts",
+    "contract_for",
     "FRIENDLY_NAME_LEN",
     "FAN_CURVE_POINTS",
     # ORIGINAL variant

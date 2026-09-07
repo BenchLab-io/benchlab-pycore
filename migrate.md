@@ -1,6 +1,84 @@
-# Migration Guide to benchlab-pycore v0.5.2
+# Migration Guide to benchlab-pycore v0.6.0
 
 This guide covers breaking changes and new features introduced in each version.
+
+---
+
+## Migrating to v0.6.0
+
+### Calibration slot ids are firmware-dependent (action required)
+
+**If you call `store_calibration()` or `load_calibration()` with a raw integer
+or with `CAL_FACTORY` / `CAL_USER`, read this before upgrading.**
+
+The firmware swapped the numeric values of these two constants: in ORIGINAL
+fw03 and BL2 fw04 they are the opposite of what they were in ORIGINAL fw02 and
+BL2 fw03.
+
+| Firmware | `CAL_FACTORY` | `CAL_USER` |
+|---|---|---|
+| ORIGINAL fw02, BL2 fw03 | 0 | 1 |
+| ORIGINAL fw03, BL2 fw04 | **1** | **0** |
+
+Previous releases hardcoded the older pair, and `cal_id` is written straight
+onto the wire with no validation the device can reject. On current firmware
+that means **`store_calibration(CAL_USER)` wrote to the factory slot.**
+
+If you ran `store_calibration()` against fw03 (ORIGINAL) or fw04 (BL2) with an
+affected release, your device's factory calibration slot may hold user data.
+The factory values are not recoverable from the host -- contact support if you
+need the device re-calibrated.
+
+#### What to change
+
+Name the slot instead of passing a number, and pass the device identity so the
+value is resolved from that firmware's contract:
+
+```python
+from benchlab_pycore.core import read_device, store_calibration, CalSlot
+
+info = read_device(ser)
+store_calibration(ser, CalSlot.USER, info["ProductId"], info["FwVersion"])
+```
+
+Raw integers still work unchanged, so existing code keeps compiling -- but it
+is only correct if you already know which firmware you are talking to. The
+module-level `CAL_FACTORY` / `CAL_USER` now hold the *current* firmware's
+values, so code that used them against current hardware is now correct, and
+code that relied on the old values against old firmware is now wrong. Use
+`CalSlot` and stop having to care.
+
+Unknown `(ProductId, FwVersion)` pairs raise `UnknownFirmwareError` rather than
+guessing, since guessing on a destructive path can cost the factory slot.
+
+### Firmware contracts are now vendored
+
+`benchlab_pycore/contracts/` holds the machine-readable wire contracts
+published by the firmware repo, and the test suite checks every ctypes struct
+size and field offset against them. They are not used to decode at runtime --
+the hand-written structures still do that -- so there is no behavioural change
+and no new runtime dependency.
+
+At import, struct sizes are checked against the contracts and a mismatch raises
+`ContractMismatchError` instead of the previous bare `AssertionError`. This
+check now also runs under `python -O`, where the old `assert` was stripped.
+
+### `TempSrc` gained BL2's HPWR sources
+
+`TempSrc` now includes `TS_HPWR1_IN`, `TS_HPWR1_OUT`, `TS_HPWR2_IN` and
+`TS_HPWR2_OUT` (values 6-9). These are BL2 only; the ORIGINAL firmware stops
+at `TAMB`. Existing members are unchanged.
+
+### Firmware version constants
+
+`BENCHLAB_BL2_FIRMWARE_VERSION` was the placeholder `0xFF` and was never read;
+it is now `4`. `BENCHLAB_ORIGINAL_FIRMWARE_VERSION` moves from `2` to `3`. Both
+now correspond to a real released firmware.
+
+### Python 3.8 is no longer supported
+
+The floor is now 3.9, where `importlib.resources.files()` is available
+unconditionally. Python 3.8 reached end of life in October 2024.
 
 ---
 

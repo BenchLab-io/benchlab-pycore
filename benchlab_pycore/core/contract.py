@@ -23,6 +23,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 __all__ = [
     "Contract",
+    "available_contracts",
     "ContractMismatchError",
     "UnknownFirmwareError",
     "available",
@@ -187,3 +188,8 @@ def contract_for(product_id: int, fw_version: int) -> Contract:
     Cached: contracts are immutable once frozen, so one parse per pair is enough.
     """
     return Contract(product_id, fw_version)
+
+
+# Exported under a less generic name at package level, where "available" alone
+# would not say available *what*.
+available_contracts = available
