@@ -65,6 +65,15 @@ def translate_sensor_struct(
         >>>     data = translate_sensor_struct(sensors)
         >>>     print(f"CPU Power: {data['CPU_Power']}W")
     """
+    # Fall back to the identity recorded by read_sensors(). Callers should not
+    # have to know that some readings are firmware-dependent: if the struct
+    # came from read_sensors() it already knows which device produced it, and
+    # an explicit argument still wins.
+    if product_id is None:
+        product_id = getattr(sensor_struct, "_benchlab_product_id", None)
+    if fw_version is None:
+        fw_version = getattr(sensor_struct, "_benchlab_fw_version", None)
+
     # Use product_id for detection if provided
     if product_id == BENCHLAB_BL2_PRODUCT_ID:
         return translate_sensor_struct_bl2(sensor_struct, product_id, fw_version)

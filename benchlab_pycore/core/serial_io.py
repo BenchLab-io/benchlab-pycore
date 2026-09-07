@@ -235,9 +235,45 @@ def read_device(ser: serial.Serial) -> Optional[Dict[str, int]]:
         return None
 
 
+def _cached_identity(ser, product_id=None):
+    """(ProductId, FwVersion) for an open connection, probed at most once.
+
+    Sensor reads are polled in a loop, so probing the device on every call
+    would add a round-trip to each one. A device cannot change its firmware
+    while the port is open, so the answer is cached on the connection object
+    and survives for its lifetime. Reconnecting re-probes, which is what
+    should happen after a firmware update.
+    """
+    # Validate the shape rather than trusting the attribute: a Mock (or any
+    # object with a permissive __getattr__) returns something non-None here.
+    cached = getattr(ser, "_benchlab_identity", None)
+    if not (isinstance(cached, tuple) and len(cached) == 2):
+        info = read_device(ser) or {}
+        cached = (info.get("ProductId"), info.get("FwVersion"))
+        try:
+            ser._benchlab_identity = cached
+        except AttributeError:
+            pass          # exotic serial object; just re-probe next time
+    resolved_pid, fw_version = cached
+    return (product_id if product_id is not None else resolved_pid), fw_version
+
+
+def _tag_identity(sensors, product_id, fw_version):
+    """Record which device produced a sensor struct.
+
+    translate_sensor_struct() reads this back so that firmware-dependent
+    scaling is applied without the caller having to know a firmware version
+    exists. Set as plain attributes rather than ctypes fields so the wire
+    layout is untouched -- the contract tests would catch it otherwise.
+    """
+    sensors._benchlab_product_id = product_id
+    sensors._benchlab_fw_version = fw_version
+
+
 def read_sensors(
     ser: serial.Serial,
-    product_id: Optional[int] = None
+    product_id: Optional[int] = None,
+    fw_version: Optional[int] = None
 ) -> Optional[Union[SensorStructOriginal, SensorStructBL2]]:
     """Read all sensors from the device.
 
@@ -265,6 +301,13 @@ def read_sensors(
         >>>     # Access raw sensor data
         >>>     voltage = sensors.Vin[0]
     """
+    # Some readings are scaled differently depending on the firmware version
+    # (Tchip, for one). Resolve it here, where the connection is in hand,
+    # rather than making every caller thread it through -- a caller that
+    # forgets gets silently wrong values, which is what happened before.
+    if fw_version is None:
+        product_id, fw_version = _cached_identity(ser, product_id)
+
     if product_id == BENCHLAB_BL2_PRODUCT_ID:
         buffer = read_uart(
             ser,
@@ -274,7 +317,9 @@ def read_sensors(
         if buffer is None:
             logger.warning("Failed to read sensors from BENCHLAB-2 device")
             return None
-        return SensorStructBL2.from_buffer_copy(buffer)
+        sensors = SensorStructBL2.from_buffer_copy(buffer)
+        _tag_identity(sensors, product_id, fw_version)
+        return sensors
     else:
         buffer = read_uart(
             ser,
@@ -284,7 +329,9 @@ def read_sensors(
         if buffer is None:
             logger.warning("Failed to read sensors from device")
             return None
-        return SensorStructOriginal.from_buffer_copy(buffer)
+        sensors = SensorStructOriginal.from_buffer_copy(buffer)
+        _tag_identity(sensors, product_id, fw_version)
+        return sensors
 
 
 def read_uid(ser: serial.Serial, retries: int = 3, delay: float = 0.2) -> Optional[str]:

@@ -333,3 +333,71 @@ def test_declared_firmware_versions_have_contracts():
             st.BENCHLAB_ORIGINAL_FIRMWARE_VERSION) in available()
     assert (st.BENCHLAB_BL2_PRODUCT_ID,
             st.BENCHLAB_BL2_FIRMWARE_VERSION) in available()
+
+
+# =============================================================================
+# Callers should not need to know firmware versions exist
+# =============================================================================
+
+def test_read_sensors_tags_identity_so_translation_is_correct():
+    """A caller passing only product_id must still get version-correct values.
+
+    pycore owns the device, so knowing which firmware scales Tchip differently
+    is its job, not its callers'. read_sensors() resolves the version from the
+    connection and records it on the struct; translate_sensor_struct() reads it
+    back. This is the regression guard for that contract.
+    """
+    from unittest.mock import MagicMock
+    import benchlab_pycore.core.serial_io as sio
+    from benchlab_pycore.core import SensorStructBL2, translate_sensor_struct
+
+    sensors = SensorStructBL2()
+    sensors.Tchip = 380                      # 38.0 degC as BL2 fw04 sends it
+    real_read_uart = sio.read_uart
+
+    def fake_read_uart(ser, cmd, size):
+        if size == 3:                        # VendorDataStruct: BL2, fw04
+            return bytes([0xEE, 0x11, 4])
+        return bytes(sensors)
+
+    sio.read_uart = fake_read_uart
+    try:
+        result = sio.read_sensors(MagicMock(spec=[]), product_id=0x11)
+        # No fw_version argument anywhere -- the old broken call shape.
+        assert translate_sensor_struct(result)["Chip_Temp"] == 38.0
+    finally:
+        sio.read_uart = real_read_uart
+
+
+def test_identity_probe_is_cached_per_connection():
+    """Sensor reads are polled, so the identity probe must not repeat.
+
+    Firmware cannot change while the port is open, so one READ_VENDOR_DATA per
+    connection is enough. Without this the fix would add a round-trip to every
+    poll.
+    """
+    from unittest.mock import MagicMock
+    import benchlab_pycore.core.serial_io as sio
+    from benchlab_pycore.core import SensorStructBL2
+
+    sensors = SensorStructBL2()
+    probes = {"vendor": 0}
+    real_read_uart = sio.read_uart
+
+    def fake_read_uart(ser, cmd, size):
+        if size == 3:
+            probes["vendor"] += 1
+            return bytes([0xEE, 0x11, 4])
+        return bytes(sensors)
+
+    sio.read_uart = fake_read_uart
+    try:
+        ser = MagicMock(spec=[])
+        for _ in range(5):
+            sio.read_sensors(ser, product_id=0x11)
+        assert probes["vendor"] == 1, (
+            "identity probed {} times across 5 reads; it must be cached "
+            "on the connection".format(probes["vendor"])
+        )
+    finally:
+        sio.read_uart = real_read_uart
