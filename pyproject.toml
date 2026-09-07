@@ -33,3 +33,12 @@ include = ["benchlab_pycore*"]
 
 [tool.setuptools.package-data]
 "benchlab_pycore.contracts" = ["*.json"]
+
+[tool.pytest.ini_options]
+# tests/test_device.py and tests/test_write_validation.py are interactive
+# hardware scripts, not unit tests: they are shaped like test_* functions that
+# take arguments, so pytest miscollects them as missing fixtures. Ignored by
+# path so that "pytest tests/" works locally and in CI alike; run them directly
+# with python when a board is attached.
+addopts = "--ignore=tests/test_device.py --ignore=tests/test_write_validation.py"
+
