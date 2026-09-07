@@ -58,3 +58,18 @@ jobs:
         # Byte comparison, not text: line-ending normalisation would otherwise
         # report drift on every file.
         run: python tools/sync_contracts.py --from .firmware --check
+
+      - name: Install test dependencies
+        if: steps.access.outputs.available == 'true'
+        run: |
+          pip install -r requirements.txt
+          pip install pytest
+
+      - name: Check advisories are all mitigated
+        if: steps.access.outputs.available == 'true'
+        # Advisories are a living document and deliberately not vendored, so
+        # this runs against the freshly checked-out copy. A newly published
+        # advisory fails here rather than going unread.
+        env:
+          BENCHLAB_ADVISORIES: .firmware/protocol/advisories.json
+        run: pytest tests/test_advisories.py -v

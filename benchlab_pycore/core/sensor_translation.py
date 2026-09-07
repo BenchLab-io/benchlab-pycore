@@ -41,6 +41,7 @@ from .utils import format_chip_temp, format_temp
 def translate_sensor_struct(
     sensor_struct: Union[SensorStructOriginal, SensorStructBL2],
     product_id: int = None,
+    fw_version: int = None,
 ) -> Dict[str, Any]:
     """Return a flat dict of interpreted sensor values suitable for CSV, graphs, MQTT, etc.
 
@@ -66,22 +67,26 @@ def translate_sensor_struct(
     """
     # Use product_id for detection if provided
     if product_id == BENCHLAB_BL2_PRODUCT_ID:
-        return translate_sensor_struct_bl2(sensor_struct)
+        return translate_sensor_struct_bl2(sensor_struct, product_id, fw_version)
     elif product_id == BENCHLAB_ORIGINAL_PRODUCT_ID:
-        return translate_sensor_struct_original(sensor_struct)
+        return translate_sensor_struct_original(sensor_struct, product_id, fw_version)
 
     # Fall back to type-based detection
     if isinstance(sensor_struct, SensorStructBL2):
-        return translate_sensor_struct_bl2(sensor_struct)
+        return translate_sensor_struct_bl2(sensor_struct, product_id, fw_version)
 
-    return translate_sensor_struct_original(sensor_struct)
+    return translate_sensor_struct_original(sensor_struct, product_id, fw_version)
 
 
 # =============================================================================
 # ORIGINAL Variant Translation
 # =============================================================================
 
-def translate_sensor_struct_original(sensor_struct: SensorStructOriginal) -> Dict[str, Any]:
+def translate_sensor_struct_original(
+    sensor_struct: SensorStructOriginal,
+    product_id: int = None,
+    fw_version: int = None,
+) -> Dict[str, Any]:
     """Translate ORIGINAL BENCHLAB device sensor data to human-readable dictionary.
 
     Handles:
@@ -125,7 +130,7 @@ def translate_sensor_struct_original(sensor_struct: SensorStructOriginal) -> Dic
     data["Vref"] = sensor_struct.Vref / 1000
 
     # ---- Temperature Sensors ----
-    data["Chip_Temp"] = format_chip_temp(sensor_struct.Tchip)
+    data["Chip_Temp"] = format_chip_temp(sensor_struct.Tchip, product_id, fw_version)
     data["Ambient_Temp"] = format_temp(sensor_struct.Tamb)
     data["Humidity"] = sensor_struct.Hum / 10
     for i in range(SENSOR_TS_NUM_ORIGINAL):
@@ -145,7 +150,11 @@ def translate_sensor_struct_original(sensor_struct: SensorStructOriginal) -> Dic
 # BL2 Variant Translation
 # =============================================================================
 
-def translate_sensor_struct_bl2(sensor_struct: SensorStructBL2) -> Dict[str, Any]:
+def translate_sensor_struct_bl2(
+    sensor_struct: SensorStructBL2,
+    product_id: int = None,
+    fw_version: int = None,
+) -> Dict[str, Any]:
     """Translate BENCHLAB-2 device sensor data to human-readable dictionary.
 
     Handles:
@@ -199,7 +208,7 @@ def translate_sensor_struct_bl2(sensor_struct: SensorStructBL2) -> Dict[str, Any
     data["Vref"] = sensor_struct.Vref / 1000
 
     # ---- Temperature Sensors (all 8 sensors) ----
-    data["Chip_Temp"] = format_chip_temp(sensor_struct.Tchip)
+    data["Chip_Temp"] = format_chip_temp(sensor_struct.Tchip, product_id, fw_version)
     data["Ambient_Temp"] = format_temp(sensor_struct.Tamb)
     data["Humidity"] = sensor_struct.Hum / 10
     for i in range(SENSOR_TS_NUM_BL2):
