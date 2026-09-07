@@ -51,6 +51,36 @@ code that relied on the old values against old firmware is now wrong. Use
 Unknown `(ProductId, FwVersion)` pairs raise `UnknownFirmwareError` rather than
 guessing, since guessing on a destructive path can cost the factory slot.
 
+### Removed: device config / NVM / reset commands (breaking)
+
+The six commands added in v0.5.1 for "forward compatibility with the intended
+protocol" are removed, along with everything that supported them:
+
+```python
+# No longer available:
+read_config, write_config, save_config, load_config, reset_config,
+set_fan_duty, reset_device          # from benchlab_pycore.core.config_io
+DeviceConfigStruct, BenchlabNvmCmd  # from benchlab_pycore.core.structures
+```
+
+`BENCHLAB_CMD` now ends at `UART_CMD_READ_VENDOR_DATA = 14`; the members
+`UART_CMD_READ_CONFIG` (15) through `UART_CMD_BOOTLOADER` (20) are gone.
+
+**Why:** no firmware implements them. The published wire contract stops at
+command 14, which the v0.5.1 notes already acknowledged. The wire has no error
+response, so calling one just times out. None of these names were exported from
+`benchlab_pycore.core` or documented in the README, and their protocol details
+(the CRC16 and the NVM write key) were transcribed from the C# reference and
+never validated against a device — so if firmware does implement these
+commands, this code would need rewriting rather than reviving.
+
+`send_action()` is **not** affected: it uses `UART_CMD_ACTION` (command 2),
+which firmware does implement, and remains the way to trigger save/load/reset
+config actions.
+
+**If you called any of these:** they could not have worked against real
+hardware, so there is no working behaviour to preserve. Remove the calls.
+
 ### Firmware contracts are now vendored
 
 `benchlab_pycore/contracts/` holds the machine-readable wire contracts

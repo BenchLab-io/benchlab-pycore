@@ -179,18 +179,6 @@ def test_config_constants(contract):
 # pycore prefixes its enum members; the contract does not.
 _CMD_PREFIX = "UART_CMD_"
 
-# Declared by pycore but present in no firmware contract: ported speculatively
-# from the C# reference and known to fail against hardware. Pinned here so the
-# gap is asserted rather than tripped over; see issue #7.
-_SPECULATIVE = {
-    "READ_CONFIG",
-    "WRITE_CONFIG",
-    "NVM_CONFIG",
-    "WRITE_FAN_DUTY",
-    "RESET",
-    "BOOTLOADER",
-}
-
 
 def test_opcode_values_match(contract):
     """Every command the firmware defines must have the same value in pycore."""
@@ -202,13 +190,19 @@ def test_opcode_values_match(contract):
         assert member.value == opcode, "{} in {}".format(name, contract.filename)
 
 
-def test_speculative_opcodes_are_exactly_the_unbacked_ones(contract):
-    """Pin the known gap: no contract backs these, and nothing else is unbacked."""
+def test_no_commands_beyond_the_contract(contract):
+    """pycore must not declare commands no firmware implements.
+
+    Opcodes 15-20 were ported speculatively from the C# reference and removed
+    in v0.6.0; this keeps them from creeping back. The wire has no error
+    response, so an unimplemented command just times out -- an expensive way
+    to discover the command never existed.
+    """
     declared = {c.name[len(_CMD_PREFIX):] for c in st.BENCHLAB_CMD}
-    unbacked = declared - set(contract.opcodes())
-    assert unbacked == _SPECULATIVE, (
-        "unbacked commands changed for {}: {}".format(
-            contract.filename, sorted(unbacked))
+    extra = declared - set(contract.opcodes())
+    assert not extra, (
+        "pycore declares commands absent from {}: {}".format(
+            contract.filename, sorted(extra))
     )
 
 

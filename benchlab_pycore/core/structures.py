@@ -147,22 +147,13 @@ class BENCHLAB_CMD(IntEnum):
     UART_CMD_STORE_CALIBRATION= 12
     UART_CMD_READ_UID         = 13
     UART_CMD_READ_VENDOR_DATA = 14
-    UART_CMD_READ_CONFIG      = 15
-    UART_CMD_WRITE_CONFIG     = 16
-    UART_CMD_NVM_CONFIG       = 17
-    UART_CMD_WRITE_FAN_DUTY   = 18
-    UART_CMD_RESET            = 19
-    UART_CMD_BOOTLOADER       = 20
+    # Ends at 14, matching the firmware contract. Commands 15-20 (READ_CONFIG,
+    # WRITE_CONFIG, NVM_CONFIG, WRITE_FAN_DUTY, RESET, BOOTLOADER) were ported
+    # speculatively from the C# reference and are implemented by no firmware;
+    # they were removed in v0.6.0. See migrate.md.
 
     def toByte(self):
         return self.value.to_bytes(1, 'little')
-
-
-class BenchlabNvmCmd(IntEnum):
-    """NVM sub-command — UART_NVM_CMD enum in usbd_cdc_if.c."""
-    CONFIG_SAVE  = 0
-    CONFIG_LOAD  = 1
-    CONFIG_RESET = 2
 
 
 # =============================================================================
@@ -333,46 +324,6 @@ class RGBConfigStruct(Structure):
         ('Blue',      c_uint8),
         ('Direction', c_uint8),
         ('Speed',     c_uint8),
-    ]
-
-
-# =============================================================================
-# Device Configuration — DeviceConfigStruct in benchlab.h
-# =============================================================================
-
-class DeviceConfigStruct(Structure):
-    """Full device config blob — DeviceConfigStruct in benchlab.h.
-
-    Field layout confirmed directly against the actual firmware source
-    (BenchLab-io/BENCHLAB-FW, benchlab.h, cfe branch):
-    ``Version + Crc + FriendlyName[32] + FanProfile[27] + RGBConfig[2]``.
-    426 bytes (not the C# service's hardcoded 220) is believed to be the
-    true wire size — ``FanConfigStruct`` (14 bytes) and ``RGBConfigStruct``
-    (6 bytes), the two nested types, were both confirmed byte-for-byte
-    against real hardware responses to UART_CMD_READ_FAN_PROFILE and
-    UART_CMD_READ_RGB.
-
-    NOTE: as of the firmware repo's current master and cfe branches,
-    UART_CMD_READ_CONFIG (and the other five commands 15-20) are NOT
-    implemented in firmware at all — the dispatcher's switch statement
-    (usbd_cdc_if.c / command.c) only handles commands 0-14, and the
-    UART_CMD/COMMAND_ID enum itself stops at READ_VENDOR_DATA (14).
-    Confirmed by direct probing against a real device: commands 15-20
-    return zero bytes. The C# service's Device_BenchLab.cs implements
-    GetConfigItems/SetConfigItems/etc. speculatively for commands that
-    don't exist on any current firmware build, and its own
-    ``SendCommand(txBuffer, out rxBuffer, 220)`` call would be wrong
-    regardless (undersized vs. the true ~426-byte struct) if firmware ever
-    does implement this. This struct's *field layout* is solid (verified
-    against firmware source + hardware); its associated *command* is not
-    yet usable against any real device.
-    """
-    _fields_ = [
-        ('Version',      c_uint8),
-        ('Crc',          c_uint16),
-        ('FriendlyName', c_uint8 * FRIENDLY_NAME_LEN),
-        ('FanProfile',   FanConfigStruct * (FAN_PROFILE_NUM * FAN_NUM)),
-        ('RGBConfig',    RGBConfigStruct * RGB_PROFILE_NUM),
     ]
 
 

@@ -259,11 +259,17 @@ Each `CalibrationValueStruct` entry has:
 - **`write_calibration_chunk(ser, offset, chunk, product_id=None)`** → `bool`
   Writes a raw byte slice at a given offset. Used internally by `write_calibration()`.
 
-- **`load_calibration(ser, cal_id)`** → `bool`
-  Loads a calibration slot from flash into RAM. `CAL_FACTORY=0`, `CAL_USER=1`.
+- **`load_calibration(ser, cal_id, product_id=None, fw_version=None)`** → `bool`
+  Loads a calibration slot from flash into RAM. Slot numbers are
+  firmware-dependent — prefer `CalSlot` with the device identity (see
+  `store_calibration` below).
 
-- **`store_calibration(ser, cal_id)`** → `bool`
-  Saves the current RAM calibration to a flash slot. `CAL_FACTORY=0`, `CAL_USER=1`.
+- **`store_calibration(ser, cal_id, product_id=None, fw_version=None)`** → `bool`
+  Saves the current RAM calibration to a flash slot. **The slot numbers differ
+  by firmware version** (they swapped in ORIGINAL fw03 / BL2 fw04), so pass a
+  `CalSlot` with the device identity and let it resolve:
+  `store_calibration(ser, CalSlot.USER, info["ProductId"], info["FwVersion"])`.
+  Writing the wrong number overwrites the factory slot.
 
 ### Configuration — Actions
 

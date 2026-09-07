@@ -54,7 +54,6 @@ import time
 
 from .structures import (
     BENCHLAB_CMD,
-    BenchlabNvmCmd,
     BENCHLAB_BL2_PRODUCT_ID,
     BENCHLAB_ORIGINAL_PRODUCT_ID,
     FAN_PROFILE_NUM,
@@ -71,7 +70,6 @@ from .structures import (
     RGBConfigStruct,
     CalibrationStruct,
     CalibrationStructBL2,
-    DeviceConfigStruct,
 )
 from .serial_io import read_uart
 
@@ -89,33 +87,6 @@ if not logger.handlers:
 
 # Maximum bytes to write in a single CDC packet (conservative USB FS limit).
 _CDC_MAX_WRITE = 64
-
-# Fixed 2-byte "write key" the firmware expects as the first two bytes of the
-# UART_CMD_NVM_CONFIG payload (Device_BenchLab.cs:1214-1216). Not computed —
-# a literal constant the firmware checks for.
-_NVM_WRITE_KEY = bytes([0x34, 0x12])
-
-# Firmware version at which config read/write is known-bugged and must be
-# refused, mirroring the C# service's guard (Device_BenchLab.cs:907-910,
-# :898). NOT independently verified against firmware/device behavior here.
-_CONFIG_BUGGED_VERSION = 0x01
-
-
-def _crc16(data: bytes) -> int:
-    """CRC16 used for DeviceConfigStruct integrity checking.
-
-    Direct port of the C# service's ``Helper.CRC16_Calc`` (BENCHLAB_Core/
-    Helper.cs), confirmed against the actual upstream source (not
-    independently verified against real firmware/device behavior, since
-    the attached test device's firmware doesn't implement
-    UART_CMD_READ_CONFIG/WRITE_CONFIG at all).
-    """
-    crc = 0xFFFF
-    for byte in data:
-        x = ((crc >> 8) ^ byte) & 0xFF
-        x ^= (x >> 4)
-        crc = ((crc << 8) ^ (x << 12) ^ (x << 5) ^ x) & 0xFFFF
-    return crc
 
 
 # ===========================================================================
@@ -742,173 +713,4 @@ def send_action(
             "send_action: action=%d p1=%d p2=%d p3=%d",
             action, param1, param2, param3,
         )
-    return ok
-
-
-# ===========================================================================
-# Full device configuration
-#
-# NOTE: as of the BenchLab-io/BENCHLAB-FW firmware repo's current master and
-# cfe branches, none of UART_CMD_READ_CONFIG / WRITE_CONFIG / NVM_CONFIG /
-# WRITE_FAN_DUTY / RESET / BOOTLOADER (commands 15-20) are implemented in
-# firmware — the command dispatcher only handles commands 0-14. Confirmed by
-# direct probing against real hardware (zero-byte response) and by reading
-# the firmware source directly (usbd_cdc_if.c / command.c switch statements,
-# and the UART_CMD/COMMAND_ID enums themselves, all stop at command 14).
-# The functions below implement the C# service's (Device_BenchLab.cs)
-# intended protocol for these commands, which is speculative/forward-looking
-# relative to any currently shipping or in-development firmware. They will
-# not work against real devices until firmware support is added, and the C#
-# reference implementation for these specific commands has NOT itself been
-# exercised by any automated or manual test in that service's repo.
-# ===========================================================================
-
-def read_config(ser: serial.Serial) -> Optional[DeviceConfigStruct]:
-    """Read the full device config blob (name + fan profiles + RGB profiles).
-
-    Mirrors ``UART_CMD_READ_CONFIG`` — NOT YET IMPLEMENTED IN FIRMWARE, see
-    module note above. Verifies the CRC16 over the struct
-    bytes starting at offset 2 (past Version+Crc), matching the C# service's
-    ``Helper.CRC16_Calc(rxBuffer, 2, rxBuffer.Length - 2)``. If
-    ``Version == 0x01``, the firmware may report ``Crc == 0`` when config
-    hasn't yet been loaded from NVM, and the check is skipped in that case.
-
-    Returns:
-        :class:`DeviceConfigStruct` on success (CRC valid or skipped), or
-        None on failure / CRC mismatch.
-    """
-    size = sizeof(DeviceConfigStruct)
-    raw = read_uart(ser, BENCHLAB_CMD.UART_CMD_READ_CONFIG, size)
-    if raw is None:
-        logger.warning("read_config: failed to read config")
-        return None
-
-    config = DeviceConfigStruct.from_buffer_copy(raw)
-    if config.Version == _CONFIG_BUGGED_VERSION and config.Crc == 0:
-        logger.warning("read_config: config not yet loaded from NVM (version 0x01, crc 0)")
-        return config
-
-    expected_crc = _crc16(raw[2:])
-    if config.Crc != expected_crc:
-        logger.error(
-            "read_config: CRC mismatch (got 0x%04X, expected 0x%04X)",
-            config.Crc, expected_crc,
-        )
-        return None
-    return config
-
-
-def write_config(ser: serial.Serial, config: DeviceConfigStruct) -> bool:
-    """Write the full device config blob in one shot.
-
-    Mirrors ``UART_CMD_WRITE_CONFIG``. Computes the CRC16 over the struct
-    bytes at offset 2 onward and overwrites bytes 0-1 (the Version+Crc
-    fields) of the outgoing buffer with the freshly computed CRC before
-    sending, matching the C# service's behavior.
-
-    Refuses to write if ``config.Version == 0x01`` ("write config is
-    bugged"), matching the C# guard.
-
-    Returns:
-        True if the command and payload were sent successfully.
-    """
-    if config.Version == _CONFIG_BUGGED_VERSION:
-        logger.error("write_config: refusing write for bugged config version 0x01")
-        return False
-
-    raw = bytearray(_struct_to_bytes(config))
-    crc = _crc16(bytes(raw[2:]))
-    raw[0:2] = crc.to_bytes(2, 'little')
-
-    ok = _write(ser, bytes([BENCHLAB_CMD.UART_CMD_WRITE_CONFIG])) and _write(ser, bytes(raw))
-    if ok:
-        logger.info("write_config: wrote %d bytes (crc=0x%04X)", len(raw), crc)
-    return ok
-
-
-def _send_nvm_command(ser: serial.Serial, sub_cmd: BenchlabNvmCmd) -> bool:
-    payload = bytes([BENCHLAB_CMD.UART_CMD_NVM_CONFIG]) + _NVM_WRITE_KEY + bytes([sub_cmd])
-    return _write(ser, payload)
-
-
-def save_config(ser: serial.Serial) -> bool:
-    """Persist the active config to the device's NVM. Mirrors ``SaveConfig()``."""
-    ok = _send_nvm_command(ser, BenchlabNvmCmd.CONFIG_SAVE)
-    if ok:
-        logger.info("save_config: config saved to NVM")
-    return ok
-
-
-def load_config(ser: serial.Serial) -> bool:
-    """Restore the active config from the device's NVM. Mirrors ``LoadConfig()``."""
-    ok = _send_nvm_command(ser, BenchlabNvmCmd.CONFIG_LOAD)
-    if ok:
-        logger.info("load_config: config loaded from NVM")
-    return ok
-
-
-def reset_config(ser: serial.Serial) -> bool:
-    """Reset the active config to defaults in NVM. Mirrors ``ResetConfig()``."""
-    ok = _send_nvm_command(ser, BenchlabNvmCmd.CONFIG_RESET)
-    if ok:
-        logger.info("reset_config: config reset")
-    return ok
-
-
-# ===========================================================================
-# Direct fan duty override
-# ===========================================================================
-
-def set_fan_duty(ser: serial.Serial, fan_id: int, duty: int) -> bool:
-    """Directly override one fan's duty cycle, bypassing profile curves.
-
-    Mirrors ``UART_CMD_WRITE_FAN_DUTY``.
-
-    Args:
-        ser:    Open serial connection to the device.
-        fan_id: Fan channel index (0 … FAN_NUM-1).
-        duty:   0-100 (0x00-0x64) for an explicit duty percentage, or 255
-                (0xFF) to hand control back to the MCU's embedded fan-curve
-                logic.
-
-    Returns:
-        True if bytes were sent successfully.
-
-    Raises:
-        ValueError: If *fan_id* or *duty* are out of range.
-    """
-    if not (0 <= fan_id < FAN_NUM):
-        raise ValueError(f"fan_id must be 0–{FAN_NUM - 1}, got {fan_id}")
-    if not (0 <= duty <= 100 or duty == 255):
-        raise ValueError(f"duty must be 0-100 or 255 (MCU control), got {duty}")
-
-    payload = bytes([BENCHLAB_CMD.UART_CMD_WRITE_FAN_DUTY, fan_id, duty])
-    ok = _write(ser, payload)
-    if ok:
-        logger.info("set_fan_duty: fan=%d duty=%d", fan_id, duty)
-    return ok
-
-
-# ===========================================================================
-# Device reset / bootloader
-# ===========================================================================
-
-def reset_device(ser: serial.Serial, bootloader: bool = False) -> bool:
-    """Reset the device, optionally into bootloader/DFU mode.
-
-    Mirrors ``UART_CMD_RESET`` / ``UART_CMD_BOOTLOADER``. No response is
-    expected — the device is about to reset/disconnect.
-
-    Args:
-        ser:        Open serial connection to the device.
-        bootloader: If True, reset into bootloader/DFU mode instead of a
-                    normal soft-reset.
-
-    Returns:
-        True if the command byte was sent successfully.
-    """
-    cmd = BENCHLAB_CMD.UART_CMD_BOOTLOADER if bootloader else BENCHLAB_CMD.UART_CMD_RESET
-    ok = _write(ser, cmd.toByte())
-    if ok:
-        logger.info("reset_device: bootloader=%s", bootloader)
     return ok
