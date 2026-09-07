@@ -22,7 +22,7 @@ FAN_NUM = 9
 # ORIGINAL Variant Constants
 # =============================================================================
 BENCHLAB_ORIGINAL_PRODUCT_ID       = 0x10
-BENCHLAB_ORIGINAL_FIRMWARE_VERSION = 0x02   # FIRMWARE_VERSION in benchlab.h
+BENCHLAB_ORIGINAL_FIRMWARE_VERSION = 0x03   # FIRMWARE_VERSION in benchlab.h
 
 SENSOR_VIN_NUM_ORIGINAL   = 13   # SENSOR_VIN_NUM
 SENSOR_POWER_NUM_ORIGINAL = 11   # SENSOR_POWER_NUM
@@ -39,7 +39,7 @@ SENSOR_TS_NAMES_ORIGINAL = ["TS_1", "TS_2", "TS_3", "TS_4"]
 # BL2 Variant Constants
 # =============================================================================
 BENCHLAB_BL2_PRODUCT_ID       = 0x11
-BENCHLAB_BL2_FIRMWARE_VERSION = 0xFF
+BENCHLAB_BL2_FIRMWARE_VERSION = 0x04   # FIRMWARE_VERSION in benchlab.h
 
 SENSOR_VIN_NUM_BL2   = 13
 SENSOR_POWER_NUM_BL2 = 23
@@ -172,8 +172,52 @@ class BenchlabNvmCmd(IntEnum):
 FAN_PROFILE_NUM    = 3    # FAN_PROFILE_NUM  in benchlab.h
 RGB_PROFILE_NUM    = 2    # RGB_PROFILE_NUM  in benchlab.h
 CAL_NUM            = 2    # CAL_NUM          in benchlab.h
-CAL_FACTORY        = 0    # CAL_FACTORY      in benchlab.h
-CAL_USER           = 1    # CAL_USER         in benchlab.h
+
+# WARNING: the numeric values of CAL_FACTORY and CAL_USER are NOT stable across
+# firmware versions -- they swapped in fw03 (ORIGINAL) and fw04 (BL2):
+#
+#     firmware              CAL_FACTORY   CAL_USER
+#     ORIGINAL fw02, BL2 fw03      0          1
+#     ORIGINAL fw03, BL2 fw04      1          0
+#
+# These module-level names are bound to the *current* firmware's values for
+# backwards compatibility. Passing them to a device running older firmware
+# targets the wrong slot, and because storing is destructive that means
+# overwriting the factory calibration. Prefer the CalSlot enum with
+# resolve_cal_slot(), which reads the correct value from that device's
+# contract; see load_calibration()/store_calibration() in config_io.py.
+CAL_FACTORY        = 1    # CAL_FACTORY      in benchlab.h (current firmware)
+CAL_USER           = 0    # CAL_USER         in benchlab.h (current firmware)
+
+
+class CalSlot(IntEnum):
+    """Which calibration slot to act on, independent of its wire value.
+
+    The wire value differs by firmware version, so name the slot and let
+    resolve_cal_slot() supply the number for the device in hand.
+    """
+    FACTORY = 0
+    USER    = 1
+
+
+def resolve_cal_slot(slot, product_id, fw_version):
+    """Wire value for *slot* on the firmware a device is actually running.
+
+    Args:
+        slot:       A CalSlot member.
+        product_id: ProductId as reported by read_device().
+        fw_version: FwVersion as reported by read_device().
+
+    Returns:
+        The integer this firmware uses for that slot.
+
+    Raises:
+        UnknownFirmwareError: If no contract matches the pair. Refusing is
+            deliberate: guessing here can overwrite factory calibration.
+    """
+    from .contract import contract_for
+    name = "CAL_FACTORY" if CalSlot(slot) is CalSlot.FACTORY else "CAL_USER"
+    return contract_for(product_id, fw_version).constant(name)
 FRIENDLY_NAME_LEN  = 32   # CONFIG_STR_LEN   in benchlab.h
 FAN_CURVE_POINTS   = 2    # FAN_CURVE_NUM_POINTS in benchlab.h
 
@@ -190,13 +234,21 @@ class FanMode(IntEnum):
 
 
 class TempSrc(IntEnum):
-    """TEMP_SRC enum in benchlab.h."""
-    AUTO = 0   # TEMP_SRC_AUTO
-    TS1  = 1   # TEMP_SRC_TS1
-    TS2  = 2   # TEMP_SRC_TS2
-    TS3  = 3   # TEMP_SRC_TS3
-    TS4  = 4   # TEMP_SRC_TS4
-    TAMB = 5   # TEMP_SRC_TAMB
+    """TEMP_SRC enum in benchlab.h.
+
+    Values 6-9 are BL2 only; the ORIGINAL variant's firmware stops at TAMB.
+    Selecting an HPWR source on an ORIGINAL device is not meaningful.
+    """
+    AUTO          = 0   # TEMP_SRC_AUTO
+    TS1           = 1   # TEMP_SRC_TS1
+    TS2           = 2   # TEMP_SRC_TS2
+    TS3           = 3   # TEMP_SRC_TS3
+    TS4           = 4   # TEMP_SRC_TS4
+    TAMB          = 5   # TEMP_SRC_TAMB
+    TS_HPWR1_IN   = 6   # TEMP_SRC_TS_HPWR1_IN  (BL2 only)
+    TS_HPWR1_OUT  = 7   # TEMP_SRC_TS_HPWR1_OUT (BL2 only)
+    TS_HPWR2_IN   = 8   # TEMP_SRC_TS_HPWR2_IN  (BL2 only)
+    TS_HPWR2_OUT  = 9   # TEMP_SRC_TS_HPWR2_OUT (BL2 only)
 
 
 class FanStop(IntEnum):
@@ -394,38 +446,62 @@ class CalibrationStructBL2(Structure):
 
 
 # =============================================================================
-# Struct size assertions
-# Verified against firmware headers (benchlab.h for ORIGINAL and BL2).
-# These will raise AssertionError at import time if a future change to
-# struct layout or _pack_ settings causes a size mismatch.
+# Import-time compatibility check
+#
+# Struct sizes are read from the vendored firmware contracts rather than a
+# hardcoded table, so this cannot drift from the firmware silently. It is
+# deliberately cheap: sizes only, and only the current firmware of each
+# variant. Full per-field offset verification against every contract is the
+# test suite's job (tests/test_contract.py), not an import-time cost.
+#
+# This raises rather than asserts, so it still fires under `python -O`.
 # =============================================================================
 
 from ctypes import sizeof as _sizeof
 
-_EXPECTED_SIZES = {
-    "VendorDataStruct":      (VendorDataStruct,       3),
-    "PowerSensor":           (PowerSensor,            12),
-    "FanSensor":             (FanSensor,              4),
-    "SensorStructOriginal":  (SensorStructOriginal,   216),
-    "SensorStructBL2":       (SensorStructBL2,        368),
-    "FanConfigStruct":       (FanConfigStruct,        14),
-    "RGBConfigStruct":       (RGBConfigStruct,        6),
-    # 426, not the C# service's hardcoded 220 (a latent out-of-bounds-read
-    # bug there — see DeviceConfigStruct docstring). Field layout confirmed
-    # against BENCHLAB-FW firmware source; the command to actually read one
-    # (UART_CMD_READ_CONFIG) isn't implemented in any current firmware build.
-    "DeviceConfigStruct":    (DeviceConfigStruct,     426),
-    "CalibrationValueStruct":(CalibrationValueStruct, 4),
-    "CalibrationStruct":     (CalibrationStruct,      178),
-    "CalibrationStructBL2":  (CalibrationStructBL2,   294),
-}
+from .contract import ContractMismatchError as _ContractMismatchError
+from .contract import contract_for as _contract_for
 
-for _name, (_struct, _expected) in _EXPECTED_SIZES.items():
-    _actual = _sizeof(_struct)
-    assert _actual == _expected, (
-        f"Struct size mismatch for {_name}: "
-        f"expected {_expected} bytes, got {_actual} bytes. "
-        f"Check _pack_ settings and field layout against firmware benchlab.h."
-    )
 
-del _sizeof, _EXPECTED_SIZES, _name, _struct, _expected, _actual
+def _verify_struct_sizes():
+    """Compare each variant's structs against its current firmware contract.
+
+    DeviceConfigStruct is deliberately absent: it belongs to the speculative
+    READ_CONFIG/WRITE_CONFIG commands that no released firmware implements, so
+    no contract describes it and there is nothing to check it against.
+    """
+    checks = [
+        (BENCHLAB_ORIGINAL_PRODUCT_ID, BENCHLAB_ORIGINAL_FIRMWARE_VERSION, {
+            "VendorDataStruct": VendorDataStruct,
+            "PowerSensor": PowerSensor,
+            "FanSensor": FanSensor,
+            "FanConfigStruct": FanConfigStruct,
+            "RGBConfigStruct": RGBConfigStruct,
+            "CalibrationValueStruct": CalibrationValueStruct,
+            "SensorStruct": SensorStructOriginal,
+            "CalibrationStruct": CalibrationStruct,
+        }),
+        (BENCHLAB_BL2_PRODUCT_ID, BENCHLAB_BL2_FIRMWARE_VERSION, {
+            "SensorStruct": SensorStructBL2,
+            "CalibrationStruct": CalibrationStructBL2,
+        }),
+    ]
+
+    for product_id, fw_version, structs in checks:
+        contract = _contract_for(product_id, fw_version)
+        for name, cls in structs.items():
+            actual = _sizeof(cls)
+            expected = contract.struct_size(name)
+            if actual != expected:
+                raise _ContractMismatchError(
+                    "Struct size mismatch for {}: {} bytes, but {} in the "
+                    "firmware contract says {} bytes. Check _pack_ settings "
+                    "and field layout, or re-vendor the contracts with "
+                    "tools/sync_contracts.py.".format(
+                        cls.__name__, actual, contract.filename, expected)
+                )
+
+
+_verify_struct_sizes()
+
+del _sizeof, _verify_struct_sizes

@@ -23,12 +23,22 @@ from typing import Any, Dict, List, Optional, Tuple
 
 __all__ = [
     "Contract",
+    "ContractMismatchError",
     "UnknownFirmwareError",
     "available",
     "contract_for",
 ]
 
 _PACKAGE = "benchlab_pycore.contracts"
+
+
+class ContractMismatchError(RuntimeError):
+    """A ctypes structure disagrees with the firmware contract.
+
+    Raised at import time by :mod:`benchlab_pycore.core.structures`. This means
+    the library would decode the wire incorrectly, so it fails loudly rather
+    than returning plausible-looking garbage.
+    """
 
 
 class UnknownFirmwareError(LookupError):

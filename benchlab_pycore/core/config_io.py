@@ -64,6 +64,8 @@ from .structures import (
     CAL_NUM,
     CAL_FACTORY,
     CAL_USER,
+    CalSlot,
+    resolve_cal_slot,
     FRIENDLY_NAME_LEN,
     FanConfigStruct,
     RGBConfigStruct,
@@ -584,67 +586,108 @@ def write_calibration(
     return True
 
 
-def load_calibration(ser: serial.Serial, cal_id: int) -> bool:
+def _resolve_slot(cal_id, product_id, fw_version, func_name):
+    """Turn a caller's slot argument into the byte this firmware expects.
+
+    A CalSlot member is resolved against the device's contract, which is the
+    safe path: the numeric values swapped between firmware versions. A plain
+    int is passed through unchanged for backwards compatibility, since that is
+    what the published API accepted -- but it is only correct if the caller
+    already knows the running firmware.
+    """
+    if isinstance(cal_id, CalSlot):
+        if product_id is None or fw_version is None:
+            raise ValueError(
+                "{}: product_id and fw_version are required when passing a "
+                "CalSlot, because the wire value differs between firmware "
+                "versions. Take them from read_device().".format(func_name)
+            )
+        return resolve_cal_slot(cal_id, product_id, fw_version)
+
+    if cal_id not in (CAL_FACTORY, CAL_USER):
+        raise ValueError(
+            "cal_id must be CAL_FACTORY ({}) or CAL_USER ({}), got {}".format(
+                CAL_FACTORY, CAL_USER, cal_id)
+        )
+    return cal_id
+
+
+def load_calibration(ser: serial.Serial, cal_id, product_id: Optional[int] = None,
+                     fw_version: Optional[int] = None) -> bool:
     """Load a calibration slot from flash into the active calibration table.
 
     Mirrors ``UART_CMD_LOAD_CALIBRATION``.
 
     Args:
-        ser:    Open serial connection to the device.
-        cal_id: Slot to load — ``0`` = factory calibration,
-                ``1`` = user calibration.
+        ser:        Open serial connection to the device.
+        cal_id:     ``CalSlot.FACTORY`` or ``CalSlot.USER`` (preferred), or a
+                    raw int for backwards compatibility.
+        product_id: ProductId from ``read_device()``. Required with a CalSlot.
+        fw_version: FwVersion from ``read_device()``. Required with a CalSlot.
 
     Returns:
         True if bytes were sent (no ACK from firmware).
 
     Raises:
-        ValueError: If *cal_id* is out of range.
+        ValueError: If *cal_id* is out of range, or a CalSlot was given
+            without the device identity needed to resolve it.
+        UnknownFirmwareError: If no contract matches the device.
 
     Example::
 
-        >>> load_calibration(ser, 1)   # restore user cal
-        True
-        >>> load_calibration(ser, 0)   # restore factory cal
+        >>> info = read_device(ser)
+        >>> load_calibration(ser, CalSlot.USER,
+        ...                  info["ProductId"], info["FwVersion"])
         True
     """
-    if cal_id not in (CAL_FACTORY, CAL_USER):
-        raise ValueError(f"cal_id must be CAL_FACTORY ({CAL_FACTORY}) or CAL_USER ({CAL_USER}), got {cal_id}")
+    cal_id = _resolve_slot(cal_id, product_id, fw_version, "load_calibration")
     payload = bytes([BENCHLAB_CMD.UART_CMD_LOAD_CALIBRATION, cal_id])
     ok = _write(ser, payload)
     if ok:
-        slot = "factory" if cal_id == CAL_FACTORY else "user"
-        logger.info("load_calibration: loaded %s slot (%d)", slot, cal_id)
+        logger.info("load_calibration: loaded slot %d", cal_id)
     return ok
 
 
-def store_calibration(ser: serial.Serial, cal_id: int) -> bool:
+def store_calibration(ser: serial.Serial, cal_id, product_id: Optional[int] = None,
+                      fw_version: Optional[int] = None) -> bool:
     """Save the active calibration table to a flash slot.
 
     Mirrors ``UART_CMD_STORE_CALIBRATION``.
 
+    .. warning::
+        This is destructive and unacknowledged. The slot numbers swapped in
+        firmware (fw03 ORIGINAL, fw04 BL2), so passing a raw int that was
+        correct on older firmware writes the *other* slot -- on current
+        firmware, a raw ``1`` means factory. Pass a CalSlot with the device
+        identity so the value is resolved from that firmware's contract.
+
     Args:
-        ser:    Open serial connection to the device.
-        cal_id: Destination slot — ``0`` = factory calibration,
-                ``1`` = user calibration.
+        ser:        Open serial connection to the device.
+        cal_id:     ``CalSlot.FACTORY`` or ``CalSlot.USER`` (preferred), or a
+                    raw int for backwards compatibility.
+        product_id: ProductId from ``read_device()``. Required with a CalSlot.
+        fw_version: FwVersion from ``read_device()``. Required with a CalSlot.
 
     Returns:
         True if bytes were sent (no ACK from firmware).
 
     Raises:
-        ValueError: If *cal_id* is out of range.
+        ValueError: If *cal_id* is out of range, or a CalSlot was given
+            without the device identity needed to resolve it.
+        UnknownFirmwareError: If no contract matches the device.
 
     Example::
 
-        >>> store_calibration(ser, 1)   # persist user cal
+        >>> info = read_device(ser)
+        >>> store_calibration(ser, CalSlot.USER,
+        ...                   info["ProductId"], info["FwVersion"])
         True
     """
-    if cal_id not in (CAL_FACTORY, CAL_USER):
-        raise ValueError(f"cal_id must be CAL_FACTORY ({CAL_FACTORY}) or CAL_USER ({CAL_USER}), got {cal_id}")
+    cal_id = _resolve_slot(cal_id, product_id, fw_version, "store_calibration")
     payload = bytes([BENCHLAB_CMD.UART_CMD_STORE_CALIBRATION, cal_id])
     ok = _write(ser, payload)
     if ok:
-        slot = "factory" if cal_id == CAL_FACTORY else "user"
-        logger.info("store_calibration: stored to %s slot (%d)", slot, cal_id)
+        logger.info("store_calibration: stored to slot %d", cal_id)
     return ok
 
 

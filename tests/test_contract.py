@@ -254,55 +254,67 @@ def test_rgb_mode_enum(contract):
     )
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="TempSrc lacks BL2's HPWR sources (6-9); fixed in phase 3d of issue #7",
-)
 def test_temp_src_enum_bl2():
-    """BL2 defines four HPWR temperature sources that pycore does not."""
+    """BL2 defines four HPWR temperature sources on top of the shared six."""
     _assert_enum_matches(contract_for(0x11, 4), "TEMP_SRC", st.TempSrc, "TEMP_SRC_")
 
 
-def test_temp_src_enum_original():
-    """The Original variant's TEMP_SRC is fully modelled today."""
-    _assert_enum_matches(contract_for(0x10, 3), "TEMP_SRC", st.TempSrc, "TEMP_SRC_")
+def test_temp_src_is_a_superset_for_every_contract(contract):
+    """TempSrc is one shared enum, so it is the union across variants.
+
+    The ORIGINAL firmware stops at TAMB, so it is checked as a subset: every
+    source that firmware defines must be present with the same value, and
+    pycore may know about sources it does not have.
+    """
+    expected = {
+        name[len("TEMP_SRC_"):]: value
+        for name, value in contract.enum("TEMP_SRC").items()
+    }
+    actual = {member.name: member.value for member in st.TempSrc}
+    missing = {k: v for k, v in expected.items() if actual.get(k) != v}
+    assert not missing, "TempSrc disagrees with {}: {}".format(
+        contract.filename, missing)
 
 
 # =============================================================================
 # Calibration slot ids -- the live data-loss bug
 # =============================================================================
 
-def _cal_param(pair):
-    """xfail only the firmwares pycore currently gets wrong.
-
-    The hardcoded 0/1 pair happens to be right on the older firmwares, so a
-    blanket xfail would XPASS there. Marking per-parameter keeps the failure
-    pinned to exactly the two contracts that swapped.
-    """
-    pid, fw = pair
-    swapped = contract_for(pid, fw).constant("CAL_FACTORY") != st.CAL_FACTORY
-    marks = (
-        pytest.mark.xfail(
-            strict=True,
-            reason="CAL_FACTORY/CAL_USER hardcoded to pre-swap values; "
-                   "fixed in phase 3b of issue #7",
-        ),
-    ) if swapped else ()
-    return pytest.param(pid, fw, marks=marks, id=pairs_ids(pair))
-
-
 @pytest.mark.parametrize(
-    "pid,fw", [_cal_param(p) for p in ALL_PAIRS]
+    "pid,fw", ALL_PAIRS, ids=[pairs_ids(p) for p in ALL_PAIRS]
 )
-def test_calibration_slot_ids_match_firmware(pid, fw):
-    """The slot ids swapped in firmware; pycore hardcodes the old pair.
+def test_resolve_cal_slot_matches_every_firmware(pid, fw):
+    """resolve_cal_slot() must produce the right wire value on *every* firmware.
 
-    Because cal_id goes straight onto the wire, being wrong here means
-    store_calibration(CAL_USER) overwrites the factory slot.
+    This is the check that matters: because cal_id goes straight onto the wire
+    and storing is destructive, resolving the wrong number means
+    store_calibration(USER) overwrites the factory slot. A single pair of
+    module constants cannot be right for all four firmwares -- only per-device
+    resolution can.
     """
     contract = contract_for(pid, fw)
-    assert st.CAL_FACTORY == contract.constant("CAL_FACTORY")
-    assert st.CAL_USER == contract.constant("CAL_USER")
+    assert st.resolve_cal_slot(st.CalSlot.FACTORY, pid, fw) == contract.constant("CAL_FACTORY")
+    assert st.resolve_cal_slot(st.CalSlot.USER, pid, fw) == contract.constant("CAL_USER")
+
+
+def test_module_cal_constants_match_current_firmware():
+    """The back-compat module constants track the newest firmware of each variant.
+
+    They are necessarily wrong for older firmware -- that is why
+    resolve_cal_slot() exists -- but they must at least match what a device
+    fresh out of the box is running.
+    """
+    for pid, fw in [(st.BENCHLAB_ORIGINAL_PRODUCT_ID, st.BENCHLAB_ORIGINAL_FIRMWARE_VERSION),
+                    (st.BENCHLAB_BL2_PRODUCT_ID, st.BENCHLAB_BL2_FIRMWARE_VERSION)]:
+        contract = contract_for(pid, fw)
+        assert st.CAL_FACTORY == contract.constant("CAL_FACTORY")
+        assert st.CAL_USER == contract.constant("CAL_USER")
+
+
+def test_resolve_cal_slot_refuses_unknown_firmware():
+    """Guessing on a destructive path is worse than failing."""
+    with pytest.raises(UnknownFirmwareError):
+        st.resolve_cal_slot(st.CalSlot.FACTORY, 0x11, 0x63)
 
 
 def test_calibration_slot_ids_are_swapped_between_versions():
@@ -321,11 +333,6 @@ def test_calibration_slot_ids_are_swapped_between_versions():
 # Firmware version constants
 # =============================================================================
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="BENCHLAB_BL2_FIRMWARE_VERSION is still the 0xFF placeholder; "
-           "fixed in phase 3c of issue #7",
-)
 def test_declared_firmware_versions_have_contracts():
     """The versions pycore claims to speak must be ones we have contracts for."""
     assert (st.BENCHLAB_ORIGINAL_PRODUCT_ID,
