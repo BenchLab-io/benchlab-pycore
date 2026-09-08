@@ -1,0 +1,75 @@
+name: contract-drift
+
+# The contracts in benchlab_pycore/contracts/ are copies of the frozen ones in
+# the firmware repo. A firmware release that changes them is exactly the event
+# this library needs to notice, so check daily rather than waiting for someone
+# to run the suite against a device.
+#
+# The firmware repo is private, so this needs a FIRMWARE_REPO_TOKEN secret with
+# read access to it. Without that secret the drift job skips rather than fails,
+# so forks and outside PRs are not blocked by a check they cannot run.
+on:
+  schedule:
+    - cron: "0 7 * * *"
+  workflow_dispatch:
+  # Also on PRs touching the vendored copies, so a hand-edit is caught early.
+  pull_request:
+    paths:
+      - "benchlab_pycore/contracts/**"
+      - "tools/sync_contracts.py"
+
+jobs:
+  drift:
+    name: Compare vendored contracts against firmware
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check for firmware repo access
+        id: access
+        env:
+          TOKEN: ${{ secrets.FIRMWARE_REPO_TOKEN }}
+        run: |
+          if [ -n "$TOKEN" ]; then
+            echo "available=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice::FIRMWARE_REPO_TOKEN is not set; skipping drift check."
+            echo "available=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Check out the firmware repo
+        if: steps.access.outputs.available == 'true'
+        uses: actions/checkout@v4
+        with:
+          repository: BenchLab-io/BENCHLAB-FW
+          path: .firmware
+          # Released contracts are frozen on main; the point of this check is
+          # to notice when main gains or re-freezes one.
+          ref: main
+          token: ${{ secrets.FIRMWARE_REPO_TOKEN }}
+
+      - uses: actions/setup-python@v5
+        if: steps.access.outputs.available == 'true'
+        with:
+          python-version: "3.13"
+
+      - name: Compare bytes
+        if: steps.access.outputs.available == 'true'
+        # Byte comparison, not text: line-ending normalisation would otherwise
+        # report drift on every file.
+        run: python tools/sync_contracts.py --from .firmware --check
+
+      - name: Install test dependencies
+        if: steps.access.outputs.available == 'true'
+        run: |
+          pip install -r requirements.txt
+          pip install pytest
+
+      - name: Check advisories are all mitigated
+        if: steps.access.outputs.available == 'true'
+        # Advisories are a living document and deliberately not vendored, so
+        # this runs against the freshly checked-out copy. A newly published
+        # advisory fails here rather than going unread.
+        env:
+          BENCHLAB_ADVISORIES: .firmware/protocol/advisories.json
+        run: pytest tests/test_advisories.py -v

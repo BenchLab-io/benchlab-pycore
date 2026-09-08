@@ -1,0 +1,255 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://benchlab.io/protocol/schema.json",
+  "title": "BENCHLAB wire-protocol contract",
+  "description": "Describes one (ProductId, FwVersion) pair's wire format. Generated from the firmware headers by tools/extract_protocol.py, which compiles a C probe using sizeof/offsetof under -fshort-enums -- the firmware is authoritative and no hand-maintained copy can drift from it. Downstream tooling should resolve a probed device to a contract via protocol/index.json and decode by the recorded offsets, never by hardcoded sizes.",
+  "type": "object",
+  "required": [
+    "status",
+    "variant",
+    "identity",
+    "usb",
+    "constants",
+    "enum_width_bytes",
+    "enums",
+    "structs",
+    "commands",
+    "wire"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "description": "Relative pointer to this schema."
+    },
+    "status": {
+      "enum": [
+        "draft",
+        "released"
+      ],
+      "description": "released = devices are in the field with this firmware. Released contracts are immutable: extract_protocol.py refuses to overwrite one whose content would change, and the release workflow flips draft -> released as part of shipping."
+    },
+    "variant": {
+      "enum": [
+        "benchlab-original",
+        "benchlab2"
+      ],
+      "description": "Contract-side product name. Note the firmware build targets are spelled benchlab1/benchlab2; this is the contract vocabulary and is what artifact names use."
+    },
+    "identity": {
+      "type": "object",
+      "required": [
+        "vendor_id",
+        "product_id",
+        "fw_version"
+      ],
+      "additionalProperties": false,
+      "description": "What the device reports from READ_VENDOR_DATA (0x0E). The (product_id, fw_version) pair is the key downstream gates on.",
+      "properties": {
+        "vendor_id": {
+          "$ref": "#/$defs/uint8"
+        },
+        "product_id": {
+          "$ref": "#/$defs/uint8"
+        },
+        "fw_version": {
+          "$ref": "#/$defs/uint8"
+        }
+      }
+    },
+    "usb": {
+      "type": "object",
+      "required": [
+        "vid",
+        "pid",
+        "note"
+      ],
+      "additionalProperties": false,
+      "description": "Stock STMicroelectronics descriptors, identical on both products. Enumeration alone identifies neither a BENCHLAB nor its generation.",
+      "properties": {
+        "vid": {
+          "$ref": "#/$defs/uint16"
+        },
+        "pid": {
+          "$ref": "#/$defs/uint16"
+        },
+        "note": {
+          "type": "string"
+        }
+      }
+    },
+    "constants": {
+      "type": "object",
+      "description": "#define values from the shared header and the variant config, e.g. SENSOR_POWER_NUM, TS_NUM, FIRMWARE_VERSION.",
+      "additionalProperties": {
+        "type": "integer"
+      }
+    },
+    "enum_width_bytes": {
+      "type": "object",
+      "description": "Measured width of each protocol enum. Every one is 1 under -fshort-enums (the arm-none-eabi default), but the value is measured rather than assumed.",
+      "additionalProperties": {
+        "type": "integer",
+        "minimum": 1
+      }
+    },
+    "enums": {
+      "type": "object",
+      "description": "Enum name -> { member name: value }.",
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": {
+          "type": "integer"
+        }
+      }
+    },
+    "structs": {
+      "type": "object",
+      "description": "Struct name -> layout. Sizes and offsets are what the compiler reported, with natural alignment and no packing.",
+      "additionalProperties": {
+        "type": "object",
+        "required": [
+          "size",
+          "fields"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "size": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "fields": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "name",
+                "type",
+                "array",
+                "offset",
+                "size"
+              ],
+              "additionalProperties": false,
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "type": {
+                  "type": "string",
+                  "description": "A C scalar (uint8_t, int16_t, ...), an enum name from `enums`, or a nested struct name from `structs`."
+                },
+                "array": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "description": "null for a scalar field; otherwise the C array-dimension expression, which is a key in `constants` (e.g. \"TS_NUM\", \"SENSOR_POWER_NUM\"). Element count is size divided by the element width; the constant names which value governs it."
+                },
+                "offset": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "size": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "commands": {
+      "type": "array",
+      "description": "Every opcode the firmware accepts.",
+      "items": {
+        "type": "object",
+        "required": [
+          "opcode",
+          "name",
+          "request",
+          "validation",
+          "response",
+          "response_size"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "opcode": {
+            "$ref": "#/$defs/uint8"
+          },
+          "name": {
+            "type": "string"
+          },
+          "request": {
+            "type": "string",
+            "description": "Request byte layout, e.g. \"[05][prof][fan]\"."
+          },
+          "validation": {
+            "type": "string",
+            "description": "Preconditions the firmware enforces; \"none\" when it accepts the bare opcode."
+          },
+          "response": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Struct name or symbolic payload name; null when the command sends nothing back."
+          },
+          "response_size": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 0,
+            "description": "Expected reply length in bytes; null when there is no reply. The protocol has no framing or length prefix, so this is the host's primary defence."
+          }
+        }
+      }
+    },
+    "wire": {
+      "type": "object",
+      "required": [
+        "byte_order",
+        "packed",
+        "framing",
+        "checksum",
+        "error_response",
+        "note"
+      ],
+      "additionalProperties": false,
+      "description": "Transport-level facts. The protocol is not self-describing: no framing, no length prefix, no checksum, no error responses.",
+      "properties": {
+        "byte_order": {
+          "const": "little-endian"
+        },
+        "packed": {
+          "const": false
+        },
+        "framing": {
+          "type": "null"
+        },
+        "checksum": {
+          "type": "null"
+        },
+        "error_response": {
+          "type": "null"
+        },
+        "note": {
+          "type": "string"
+        }
+      }
+    }
+  },
+  "$defs": {
+    "uint8": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 255
+    },
+    "uint16": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 65535
+    }
+  }
+}

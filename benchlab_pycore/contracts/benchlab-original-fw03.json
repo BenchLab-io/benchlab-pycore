@@ -1,0 +1,625 @@
+{
+  "$schema": "./schema.json",
+  "status": "released",
+  "variant": "benchlab-original",
+  "identity": {
+    "vendor_id": 238,
+    "product_id": 16,
+    "fw_version": 3
+  },
+  "usb": {
+    "vid": 1155,
+    "pid": 22336,
+    "note": "stock ST descriptors; cannot identify a BENCHLAB -- use WELCOME + READ_VENDOR_DATA"
+  },
+  "constants": {
+    "CAL_FACTORY": 1,
+    "CAL_MUL": 4096,
+    "CAL_NUM": 2,
+    "CAL_SHIFT_BITS": 12,
+    "CAL_USER": 0,
+    "CONFIG_STR_LEN": 32,
+    "CONFIG_VERSION": 0,
+    "FAN_CURVE_NUM_POINTS": 2,
+    "FAN_NUM": 9,
+    "FAN_PROFILE_NUM": 3,
+    "FIRMWARE_VERSION": 3,
+    "PRODUCT_ID": 16,
+    "RGB_PROFILE_NUM": 2,
+    "SENSOR_POWER_NUM": 11,
+    "SENSOR_VIN_NUM": 13,
+    "TS_1": 0,
+    "TS_2": 1,
+    "TS_3": 2,
+    "TS_4": 3,
+    "TS_NUM": 4,
+    "UPDATE_FLAG_CLEAR": 0,
+    "UPDATE_FLAG_LOAD_DEFAULTS": 2,
+    "UPDATE_FLAG_STORE": 1,
+    "VENDOR_ID": 238
+  },
+  "enum_width_bytes": {
+    "FAN_SWITCH_STATUS": 1,
+    "RGB_SWITCH_STATUS": 1,
+    "RGB_EXT_STATUS": 1,
+    "FAN_MODE": 1,
+    "TEMP_SRC": 1,
+    "FAN_STOP": 1,
+    "RGB_MODE": 1,
+    "RGB_DIRECTION": 1,
+    "TS_B": 1,
+    "BUTTON": 1
+  },
+  "enums": {
+    "FAN_SWITCH_STATUS": {
+      "FAN_SWITCH_STATUS_AUTO": 0,
+      "FAN_SWITCH_STATUS_50_PERCENT": 1,
+      "FAN_SWITCH_STATUS_100_PERCENT": 2
+    },
+    "RGB_SWITCH_STATUS": {
+      "RGB_SWITCH_STATUS_WORK": 0,
+      "RGB_SWITCH_STATUS_PLAY": 1
+    },
+    "RGB_EXT_STATUS": {
+      "RGB_EXT_STATUS_NOT_DETECTED": 0,
+      "RGB_EXT_STATUS_DETECTED": 1
+    },
+    "FAN_MODE": {
+      "FAN_MODE_TEMP_CONTROL": 0,
+      "FAN_MODE_FIXED": 1,
+      "FAN_MODE_EXT": 2
+    },
+    "TEMP_SRC": {
+      "TEMP_SRC_AUTO": 0,
+      "TEMP_SRC_TS1": 1,
+      "TEMP_SRC_TS2": 2,
+      "TEMP_SRC_TS3": 3,
+      "TEMP_SRC_TS4": 4,
+      "TEMP_SRC_TAMB": 5
+    },
+    "FAN_STOP": {
+      "FAN_STOP_OFF": 0,
+      "FAN_STOP_ON": 1
+    },
+    "RGB_MODE": {
+      "RGB_MODE_RAINBOW_CYCLE": 0,
+      "RGB_MODE_RAINBOW_COLOR_CHASE": 1,
+      "RGB_MODE_RAINBOW": 2,
+      "RGB_MODE_TWINKLE": 3,
+      "RGB_MODE_METEOR_SHOWER": 4,
+      "RGB_MODE_COLOR_WIPE": 5,
+      "RGB_MODE_THEATRE_CHASE": 6,
+      "RGB_MODE_FADE_IN_OUT": 7,
+      "RGB_MODE_SINGLE_COLOR_CHASE": 8,
+      "RGB_MODE_SINGLE_COLOR": 9
+    },
+    "RGB_DIRECTION": {
+      "RGB_DIRECTION_CLOCKWISE": 0,
+      "RGB_DIRECTION_COUNTER_CLOCKWISE": 1
+    },
+    "TS_B": {
+      "TS_B_3950": 0,
+      "TS_B_3380": 1
+    },
+    "BUTTON": {
+      "BUTTON_POWER": 0,
+      "BUTTON_RESET": 1,
+      "BUTTON_OTHER": 2
+    }
+  },
+  "structs": {
+    "VendorDataStruct": {
+      "size": 3,
+      "fields": [
+        {
+          "name": "VendorId",
+          "type": "uint8_t",
+          "array": null,
+          "offset": 0,
+          "size": 1
+        },
+        {
+          "name": "ProductId",
+          "type": "uint8_t",
+          "array": null,
+          "offset": 1,
+          "size": 1
+        },
+        {
+          "name": "FwVersion",
+          "type": "uint8_t",
+          "array": null,
+          "offset": 2,
+          "size": 1
+        }
+      ]
+    },
+    "PowerSensor": {
+      "size": 12,
+      "fields": [
+        {
+          "name": "Voltage",
+          "type": "int16_t",
+          "array": null,
+          "offset": 0,
+          "size": 2
+        },
+        {
+          "name": "Current",
+          "type": "int32_t",
+          "array": null,
+          "offset": 4,
+          "size": 4
+        },
+        {
+          "name": "Power",
+          "type": "int32_t",
+          "array": null,
+          "offset": 8,
+          "size": 4
+        }
+      ]
+    },
+    "FanSensor": {
+      "size": 4,
+      "fields": [
+        {
+          "name": "Enable",
+          "type": "uint8_t",
+          "array": null,
+          "offset": 0,
+          "size": 1
+        },
+        {
+          "name": "Duty",
+          "type": "uint8_t",
+          "array": null,
+          "offset": 1,
+          "size": 1
+        },
+        {
+          "name": "Tach",
+          "type": "uint16_t",
+          "array": null,
+          "offset": 2,
+          "size": 2
+        }
+      ]
+    },
+    "SensorStruct": {
+      "size": 216,
+      "fields": [
+        {
+          "name": "Vin",
+          "type": "int16_t",
+          "array": "SENSOR_VIN_NUM",
+          "offset": 0,
+          "size": 26
+        },
+        {
+          "name": "Vdd",
+          "type": "uint16_t",
+          "array": null,
+          "offset": 26,
+          "size": 2
+        },
+        {
+          "name": "Vref",
+          "type": "uint16_t",
+          "array": null,
+          "offset": 28,
+          "size": 2
+        },
+        {
+          "name": "Tchip",
+          "type": "int16_t",
+          "array": null,
+          "offset": 30,
+          "size": 2
+        },
+        {
+          "name": "Ts",
+          "type": "int16_t",
+          "array": "TS_NUM",
+          "offset": 32,
+          "size": 8
+        },
+        {
+          "name": "Tamb",
+          "type": "int16_t",
+          "array": null,
+          "offset": 40,
+          "size": 2
+        },
+        {
+          "name": "Hum",
+          "type": "uint16_t",
+          "array": null,
+          "offset": 42,
+          "size": 2
+        },
+        {
+          "name": "FanSwitchStatus",
+          "type": "FAN_SWITCH_STATUS",
+          "array": null,
+          "offset": 44,
+          "size": 1
+        },
+        {
+          "name": "RGBSwitchStatus",
+          "type": "RGB_SWITCH_STATUS",
+          "array": null,
+          "offset": 45,
+          "size": 1
+        },
+        {
+          "name": "RgbExtStatus",
+          "type": "RGB_EXT_STATUS",
+          "array": null,
+          "offset": 46,
+          "size": 1
+        },
+        {
+          "name": "FanExtDuty",
+          "type": "uint8_t",
+          "array": null,
+          "offset": 47,
+          "size": 1
+        },
+        {
+          "name": "PowerReadings",
+          "type": "PowerSensor",
+          "array": "SENSOR_POWER_NUM",
+          "offset": 48,
+          "size": 132
+        },
+        {
+          "name": "Fans",
+          "type": "FanSensor",
+          "array": "FAN_NUM",
+          "offset": 180,
+          "size": 36
+        }
+      ]
+    },
+    "FanConfigStruct": {
+      "size": 14,
+      "fields": [
+        {
+          "name": "FanMode",
+          "type": "FAN_MODE",
+          "array": null,
+          "offset": 0,
+          "size": 1
+        },
+        {
+          "name": "TempSource",
+          "type": "TEMP_SRC",
+          "array": null,
+          "offset": 1,
+          "size": 1
+        },
+        {
+          "name": "Temp",
+          "type": "int16_t",
+          "array": "FAN_CURVE_NUM_POINTS",
+          "offset": 2,
+          "size": 4
+        },
+        {
+          "name": "Duty",
+          "type": "uint8_t",
+          "array": "FAN_CURVE_NUM_POINTS",
+          "offset": 6,
+          "size": 2
+        },
+        {
+          "name": "RampStep",
+          "type": "uint8_t",
+          "array": null,
+          "offset": 8,
+          "size": 1
+        },
+        {
+          "name": "FixedDuty",
+          "type": "uint8_t",
+          "array": null,
+          "offset": 9,
+          "size": 1
+        },
+        {
+          "name": "MinDuty",
+          "type": "uint8_t",
+          "array": null,
+          "offset": 10,
+          "size": 1
+        },
+        {
+          "name": "MaxDuty",
+          "type": "uint8_t",
+          "array": null,
+          "offset": 11,
+          "size": 1
+        },
+        {
+          "name": "FanStop",
+          "type": "FAN_STOP",
+          "array": null,
+          "offset": 12,
+          "size": 1
+        }
+      ]
+    },
+    "RGBConfigStruct": {
+      "size": 6,
+      "fields": [
+        {
+          "name": "Mode",
+          "type": "RGB_MODE",
+          "array": null,
+          "offset": 0,
+          "size": 1
+        },
+        {
+          "name": "Red",
+          "type": "uint8_t",
+          "array": null,
+          "offset": 1,
+          "size": 1
+        },
+        {
+          "name": "Green",
+          "type": "uint8_t",
+          "array": null,
+          "offset": 2,
+          "size": 1
+        },
+        {
+          "name": "Blue",
+          "type": "uint8_t",
+          "array": null,
+          "offset": 3,
+          "size": 1
+        },
+        {
+          "name": "Direction",
+          "type": "RGB_DIRECTION",
+          "array": null,
+          "offset": 4,
+          "size": 1
+        },
+        {
+          "name": "Speed",
+          "type": "uint8_t",
+          "array": null,
+          "offset": 5,
+          "size": 1
+        }
+      ]
+    },
+    "CalibrationValueStruct": {
+      "size": 4,
+      "fields": [
+        {
+          "name": "Offset",
+          "type": "int16_t",
+          "array": null,
+          "offset": 0,
+          "size": 2
+        },
+        {
+          "name": "GainOffset",
+          "type": "int16_t",
+          "array": null,
+          "offset": 2,
+          "size": 2
+        }
+      ]
+    },
+    "CalibrationStruct": {
+      "size": 178,
+      "fields": [
+        {
+          "name": "Crc",
+          "type": "uint16_t",
+          "array": null,
+          "offset": 0,
+          "size": 2
+        },
+        {
+          "name": "Vin",
+          "type": "CalibrationValueStruct",
+          "array": "SENSOR_VIN_NUM",
+          "offset": 2,
+          "size": 52
+        },
+        {
+          "name": "Vdd",
+          "type": "CalibrationValueStruct",
+          "array": null,
+          "offset": 54,
+          "size": 4
+        },
+        {
+          "name": "Vref",
+          "type": "CalibrationValueStruct",
+          "array": null,
+          "offset": 58,
+          "size": 4
+        },
+        {
+          "name": "Ts",
+          "type": "CalibrationValueStruct",
+          "array": "TS_NUM",
+          "offset": 62,
+          "size": 16
+        },
+        {
+          "name": "TsB",
+          "type": "TS_B",
+          "array": "TS_NUM",
+          "offset": 78,
+          "size": 4
+        },
+        {
+          "name": "Tamb",
+          "type": "CalibrationValueStruct",
+          "array": null,
+          "offset": 82,
+          "size": 4
+        },
+        {
+          "name": "Hum",
+          "type": "CalibrationValueStruct",
+          "array": null,
+          "offset": 86,
+          "size": 4
+        },
+        {
+          "name": "PowerReadingVoltage",
+          "type": "CalibrationValueStruct",
+          "array": "SENSOR_POWER_NUM",
+          "offset": 90,
+          "size": 44
+        },
+        {
+          "name": "PowerReadingCurrent",
+          "type": "CalibrationValueStruct",
+          "array": "SENSOR_POWER_NUM",
+          "offset": 134,
+          "size": 44
+        }
+      ]
+    }
+  },
+  "commands": [
+    {
+      "opcode": 0,
+      "name": "WELCOME",
+      "request": "[00]",
+      "validation": "none",
+      "response": "welcome_string",
+      "response_size": 9
+    },
+    {
+      "opcode": 1,
+      "name": "READ_SENSORS",
+      "request": "[01]",
+      "validation": "none",
+      "response": "SensorStruct",
+      "response_size": 216
+    },
+    {
+      "opcode": 2,
+      "name": "ACTION",
+      "request": "[02][act][p1][p2][p3]",
+      "validation": "len==5 and device idle",
+      "response": null,
+      "response_size": null
+    },
+    {
+      "opcode": 3,
+      "name": "READ_NAME",
+      "request": "[03]",
+      "validation": "none",
+      "response": "friendly_name",
+      "response_size": 32
+    },
+    {
+      "opcode": 4,
+      "name": "WRITE_NAME",
+      "request": "[04][name...]",
+      "validation": "len<=33",
+      "response": null,
+      "response_size": null
+    },
+    {
+      "opcode": 5,
+      "name": "READ_FAN_PROFILE",
+      "request": "[05][prof][fan]",
+      "validation": "len==3, prof<3, fan<9",
+      "response": "FanConfigStruct",
+      "response_size": 14
+    },
+    {
+      "opcode": 6,
+      "name": "WRITE_FAN_PROFILE",
+      "request": "[06][prof][fan][cfg]",
+      "validation": "len==3+sizeof(FanConfig)",
+      "response": null,
+      "response_size": null
+    },
+    {
+      "opcode": 7,
+      "name": "READ_RGB",
+      "request": "[07][prof]",
+      "validation": "len==2, prof<2",
+      "response": "RGBConfigStruct",
+      "response_size": 6
+    },
+    {
+      "opcode": 8,
+      "name": "WRITE_RGB",
+      "request": "[08][prof][cfg]",
+      "validation": "len==2+sizeof(RGBConfig)",
+      "response": null,
+      "response_size": null
+    },
+    {
+      "opcode": 9,
+      "name": "READ_CALIBRATION",
+      "request": "[09]",
+      "validation": "len==1",
+      "response": "CalibrationStruct",
+      "response_size": 178
+    },
+    {
+      "opcode": 10,
+      "name": "WRITE_CALIBRATION",
+      "request": "[0A][off][data...]",
+      "validation": "len>2, off+n<=sizeof",
+      "response": null,
+      "response_size": null
+    },
+    {
+      "opcode": 11,
+      "name": "LOAD_CALIBRATION",
+      "request": "[0B][slot]",
+      "validation": "len==2, slot<2",
+      "response": null,
+      "response_size": null
+    },
+    {
+      "opcode": 12,
+      "name": "STORE_CALIBRATION",
+      "request": "[0C][slot]",
+      "validation": "len==2, slot<2",
+      "response": null,
+      "response_size": null
+    },
+    {
+      "opcode": 13,
+      "name": "READ_UID",
+      "request": "[0D]",
+      "validation": "none",
+      "response": "uid",
+      "response_size": 12
+    },
+    {
+      "opcode": 14,
+      "name": "READ_VENDOR_DATA",
+      "request": "[0E]",
+      "validation": "none",
+      "response": "VendorDataStruct",
+      "response_size": 3
+    }
+  ],
+  "wire": {
+    "byte_order": "little-endian",
+    "packed": false,
+    "framing": null,
+    "checksum": null,
+    "error_response": null,
+    "note": "malformed requests return zero bytes; hosts need timeout-based recovery"
+  }
+}
