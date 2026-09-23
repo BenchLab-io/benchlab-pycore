@@ -23,6 +23,7 @@ from benchlab_pycore.core import (
     FanSensor,
     SensorStructOriginal,
     SensorStructBL2,
+    SensorStructBL2Legacy,
     BENCHLAB_CMD,
     # ORIGINAL variant constants
     SENSOR_VIN_NUM_ORIGINAL,
@@ -38,6 +39,7 @@ from benchlab_pycore.core import (
     SENSOR_POWER_NAMES_BL2,
     SENSOR_TS_NAMES_BL2,
     BENCHLAB_BL2_PRODUCT_ID,
+    BENCHLAB_BL2_FIRMWARE_VERSION,
 )
 
 
@@ -170,13 +172,36 @@ def test_read_sensors_original_success(mock_read_uart):
 
 @patch("benchlab_pycore.core.serial_io.read_uart")
 def test_read_sensors_bl2_success(mock_read_uart):
-    """Test read_sensors with BL2 product_id returns SensorStructBL2."""
+    """Test read_sensors with BL2 product_id/fw_version returns SensorStructBL2.
+
+    fw_version must be passed explicitly here: on BL2, read_sensors() picks
+    between SensorStructBL2 (fw05+, with FaultStatus/FaultLog) and the
+    shorter SensorStructBL2Legacy (fw03/fw04) based on it. Leaving it out
+    would fall through to probing the device via read_device(), which
+    read_uart is also mocked for here and would return garbage identity.
+    """
     mock_read_uart.return_value = bytes([0] * sizeof(SensorStructBL2))
-    
+
     mock_ser = Mock()
-    result = read_sensors(mock_ser, product_id=BENCHLAB_BL2_PRODUCT_ID)
-    
+    result = read_sensors(
+        mock_ser, product_id=BENCHLAB_BL2_PRODUCT_ID, fw_version=BENCHLAB_BL2_FIRMWARE_VERSION
+    )
+
     assert isinstance(result, SensorStructBL2)
+
+
+@patch("benchlab_pycore.core.serial_io.read_uart")
+def test_read_sensors_bl2_legacy_firmware(mock_read_uart):
+    """Test read_sensors with an old BL2 fw_version returns the legacy struct."""
+    mock_read_uart.return_value = bytes([0] * sizeof(SensorStructBL2Legacy))
+
+    mock_ser = Mock()
+    result = read_sensors(mock_ser, product_id=BENCHLAB_BL2_PRODUCT_ID, fw_version=4)
+
+    assert isinstance(result, SensorStructBL2Legacy)
+    mock_read_uart.assert_called_once_with(
+        mock_ser, BENCHLAB_CMD.UART_CMD_READ_SENSORS, sizeof(SensorStructBL2Legacy)
+    )
 
 
 @patch("benchlab_pycore.core.serial_io.read_uart")

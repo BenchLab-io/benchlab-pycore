@@ -26,6 +26,7 @@ from .structures import (
     SENSOR_POWER_NAMES_BL2,
     SENSOR_TS_NAMES_BL2,
     SensorStructBL2,
+    SensorStructBL2Legacy,
 
     # Product IDs for variant detection
     BENCHLAB_ORIGINAL_PRODUCT_ID,
@@ -81,7 +82,7 @@ def translate_sensor_struct(
         return translate_sensor_struct_original(sensor_struct, product_id, fw_version)
 
     # Fall back to type-based detection
-    if isinstance(sensor_struct, SensorStructBL2):
+    if isinstance(sensor_struct, (SensorStructBL2, SensorStructBL2Legacy)):
         return translate_sensor_struct_bl2(sensor_struct, product_id, fw_version)
 
     return translate_sensor_struct_original(sensor_struct, product_id, fw_version)

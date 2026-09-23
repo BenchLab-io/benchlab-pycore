@@ -160,12 +160,13 @@ class SensorStructOriginal(Structure):
     ]
 
 
-class SensorStructBL2(Structure):
-    """Sensor data for BENCHLAB-2 (extended variant).
+class SensorStructBL2Legacy(Structure):
+    """Sensor data for BENCHLAB-2, pre-fw05 (368 bytes, no fault fields).
 
-    FaultStatus/FaultLog were added in fw06 — bitmasks over the Fault enum,
-    one bit per FAULT_NUM member. FaultStatus is the live fault state;
-    FaultLog is the latched (sticky) history.
+    BL2 fw03/fw04 send this shorter layout -- READ_SENSORS did not grow
+    FaultStatus/FaultLog until fw05. read_sensors() selects this class for
+    those older firmware versions; a device still running one would
+    otherwise get a short read against the newer 384-byte SensorStructBL2.
     """
     _fields_ = [
         ('Vin',             c_int16  * SENSOR_VIN_NUM_BL2),
@@ -181,9 +182,25 @@ class SensorStructBL2(Structure):
         ('FanExtDuty',      c_uint8),
         ('PowerReadings',   PowerSensor * SENSOR_POWER_NUM_BL2),
         ('Fans',            FanSensor   * FAN_NUM),
+    ]
+
+
+class SensorStructBL2(Structure):
+    """Sensor data for BENCHLAB-2, fw05+ (extended variant).
+
+    FaultStatus/FaultLog were added in fw05 — bitmasks over the Fault enum,
+    one bit per FAULT_NUM member. FaultStatus is the live fault state;
+    FaultLog is the latched (sticky) history. See SensorStructBL2Legacy for
+    the pre-fw05 (368-byte) layout.
+    """
+    _fields_ = SensorStructBL2Legacy._fields_ + [
         ('FaultStatus',     c_uint64),
         ('FaultLog',        c_uint64),
     ]
+
+
+# fw05 is the first BL2 firmware to send FaultStatus/FaultLog on READ_SENSORS.
+BENCHLAB_BL2_SENSOR_FAULT_FIELDS_FROM = 5
 
 
 # =============================================================================
@@ -588,6 +605,12 @@ def _verify_struct_sizes():
             "CalibrationStruct": CalibrationStructBL2,
             "FaultConfigStruct": FaultConfigStruct,
             "DeviceConfigStruct": DeviceConfigStructBL2,
+        }),
+        # The last released pre-fault BL2 firmware -- checks
+        # SensorStructBL2Legacy against the shorter, still-supported
+        # READ_SENSORS layout that fw03/fw04 send.
+        (BENCHLAB_BL2_PRODUCT_ID, BENCHLAB_BL2_SENSOR_FAULT_FIELDS_FROM - 1, {
+            "SensorStruct": SensorStructBL2Legacy,
         }),
     ]
 

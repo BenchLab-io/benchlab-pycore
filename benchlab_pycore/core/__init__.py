@@ -93,6 +93,8 @@ from .structures import (
     SENSOR_TS_NAMES_ORIGINAL,
     # BL2 variant
     SensorStructBL2,
+    SensorStructBL2Legacy,
+    BENCHLAB_BL2_SENSOR_FAULT_FIELDS_FROM,
     BENCHLAB_BL2_PRODUCT_ID,
     BENCHLAB_BL2_FIRMWARE_VERSION,
     SENSOR_VIN_NUM_BL2,
@@ -191,6 +193,8 @@ __all__ = [
     "SENSOR_TS_NAMES_ORIGINAL",
     # BL2 variant
     "SensorStructBL2",
+    "SensorStructBL2Legacy",
+    "BENCHLAB_BL2_SENSOR_FAULT_FIELDS_FROM",
     "BENCHLAB_BL2_PRODUCT_ID",
     "BENCHLAB_BL2_FIRMWARE_VERSION",
     "SENSOR_VIN_NUM_BL2",

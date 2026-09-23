@@ -161,8 +161,11 @@ ser.close()
   Reads vendor info. Returns dict with `'VendorId'`, `'ProductId'`, `'FwVersion'`.
   Use `ProductId` to determine variant: `0x10` = ORIGINAL, `0x11` = BL2.
 
-- **`read_sensors(ser, product_id=None)`** → `Optional[Union[SensorStructOriginal, SensorStructBL2]]`
-  Reads all sensors. Pass `product_id` to select the correct struct.
+- **`read_sensors(ser, product_id=None, fw_version=None)`** → `Optional[Union[SensorStructOriginal, SensorStructBL2, SensorStructBL2Legacy]]`
+  Reads all sensors. Pass `product_id` to select ORIGINAL vs. BL2, and
+  `fw_version` to pick between `SensorStructBL2` (fw05+, with
+  `FaultStatus`/`FaultLog`) and `SensorStructBL2Legacy` (fw03/fw04). Both are
+  probed from the device automatically if omitted.
 
 - **`read_uid(ser, retries=3, delay=0.2)`** → `Optional[str]`
   Returns device UID as an uppercase hex string.
@@ -311,7 +314,7 @@ than raising.
 `FaultAction`: `LED=0`, `BUZZER=1`, `SOFT_POWER=2`, `HARD_POWER=3`, `RESET=4`, `FIVE_VSB_POWER=5`.
 `Fault` has 34 members covering OTP (over-temp), OCP (over-current), wire-level OCP, and current-imbalance conditions — see `structures.py` for the full list.
 
-`SensorStructBL2` also exposes `FaultStatus`/`FaultLog` (`uint64` bitmasks over `Fault`, live state and latched history respectively) via `read_sensors()`.
+`SensorStructBL2` (BL2 fw05+) also exposes `FaultStatus`/`FaultLog` (`uint64` bitmasks over `Fault`, live state and latched history respectively) via `read_sensors()`. Devices still on BL2 fw03/fw04 get `SensorStructBL2Legacy` instead (no fault fields, 368 bytes) — `read_sensors()` picks the right one automatically based on `fw_version`.
 
 ### Configuration — Device Configuration
 

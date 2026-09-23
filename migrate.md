@@ -15,12 +15,19 @@ Both are wire-format-breaking bumps -- devices still running older firmware
 continue to work (older contracts remain vendored), but `read_sensors()` and
 the new commands below decode according to the *current* firmware's layout.
 
-### `SensorStructBL2` gained `FaultStatus` / `FaultLog` (BL2 only)
+### `SensorStructBL2` gained `FaultStatus` / `FaultLog` (BL2 fw05+)
 
-Two trailing `uint64` bitmask fields, one bit per `Fault` enum member (34
-total: OTP/OCP/wire-OCP/current-imbalance faults). `FaultStatus` is the live
-fault state; `FaultLog` is the latched (sticky) history. `SensorStructOriginal`
-is unchanged -- ORIGINAL has no fault-detection hardware.
+`READ_SENSORS` grew two trailing `uint64` bitmask fields at BL2 **fw05**
+(368 -> 384 bytes), one bit per `Fault` enum member (34 total:
+OTP/OCP/wire-OCP/current-imbalance faults). `FaultStatus` is the live fault
+state; `FaultLog` is the latched (sticky) history. `SensorStructOriginal` is
+unchanged -- ORIGINAL has no fault-detection hardware.
+
+`read_sensors()` picks between `SensorStructBL2` (fw05+) and the new
+`SensorStructBL2Legacy` (fw03/fw04, 368 bytes, no fault fields)
+automatically based on the device's `fw_version` -- pass it explicitly, or
+let `read_sensors()` probe it, so a BL2 device still on older firmware gets
+the right struct rather than a short read against the newer 384-byte layout.
 
 ### `WELCOME` response size is now version-gated
 
