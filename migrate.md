@@ -8,8 +8,8 @@ This guide covers breaking changes and new features introduced in each version.
 
 ### Firmware version bump (action required if you pin firmware)
 
-Current firmware moves to ORIGINAL fw05 (`benchlab1/v0.5.1`) and BL2 fw06
-(`benchlab2/v0.6.1`). `BENCHLAB_ORIGINAL_FIRMWARE_VERSION` is now `5`
+Current firmware moves to ORIGINAL fw05 (`benchlab1/v0.5.2`) and BL2 fw06
+(`benchlab2/v0.6.2`). `BENCHLAB_ORIGINAL_FIRMWARE_VERSION` is now `5`
 (previously `3`); `BENCHLAB_BL2_FIRMWARE_VERSION` is now `6` (previously `4`).
 Both are wire-format-breaking bumps -- devices still running older firmware
 continue to work (older contracts remain vendored), but `read_sensors()` and
