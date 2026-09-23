@@ -44,22 +44,15 @@ _BY_VARIANT = {
         _COMMON,
         SensorStruct=st.SensorStructOriginal,
         CalibrationStruct=st.CalibrationStruct,
+        DeviceConfigStruct=st.DeviceConfigStruct,
     ),
     "benchlab2": dict(
         _COMMON,
         SensorStruct=st.SensorStructBL2,
         CalibrationStruct=st.CalibrationStructBL2,
         FaultConfigStruct=st.FaultConfigStruct,
+        DeviceConfigStruct=st.DeviceConfigStructBL2,
     ),
-}
-
-# DeviceConfigStruct is checked by size only (test_device_config_struct_size
-# below): the contract's `structs.DeviceConfigStruct.fields` omits
-# FanProfile entirely (see structures.py), so the field-level checks above
-# would report a false positive if it were added to _BY_VARIANT.
-_DEVICE_CONFIG_BY_VARIANT = {
-    "benchlab-original": st.DeviceConfigStruct,
-    "benchlab2": st.DeviceConfigStructBL2,
 }
 
 
@@ -174,21 +167,6 @@ def test_no_extra_ctypes_fields(latest_contract):
                 cls.__name__, name, latest_contract.filename,
                 sorted(ctypes_fields - contract_fields))
         )
-
-
-def test_device_config_struct_size(latest_contract):
-    """DeviceConfigStruct, checked by total size only.
-
-    The contract's `structs.DeviceConfigStruct.fields` list omits
-    FanProfile[FAN_PROFILE_NUM][FAN_NUM] entirely (see PROTOCOL.md Sec 5.6
-    and the comment above DeviceConfigStruct in structures.py), so the
-    field-level offset/extra-field checks above cannot be applied to it --
-    total size is the only backstop the contract offers.
-    """
-    cls = _DEVICE_CONFIG_BY_VARIANT[latest_contract.variant]
-    assert ctypes.sizeof(cls) == latest_contract.struct_size("DeviceConfigStruct"), (
-        "{} vs DeviceConfigStruct in {}".format(cls.__name__, latest_contract.filename)
-    )
 
 
 # =============================================================================

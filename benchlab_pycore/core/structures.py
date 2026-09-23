@@ -504,11 +504,12 @@ class FaultConfigStruct(Structure):
 # =============================================================================
 # Device Configuration — DeviceConfigStruct in benchlab.h
 #
-# The firmware contract's `structs.DeviceConfigStruct.fields` list is not
-# exhaustive: it omits FanProfile[FAN_PROFILE_NUM][FAN_NUM] entirely (see
-# PROTOCOL.md Sec 5.6). The layout below follows the C struct directly;
-# _verify_struct_sizes() checks the *total* size against the contract as the
-# correctness backstop, since the per-field offsets aren't fully specified.
+# ORIGINAL fw05 / BL2 fw06 shipped this contract without a FanProfile entry
+# in structs.DeviceConfigStruct.fields (BENCHLAB-FW#50); fixed in
+# benchlab1/v0.5.2 and benchlab2/v0.6.2 (BENCHLAB-FW#51), which added
+# FanProfile at offset 36, size 378 -- matching the layout below and
+# PROTOCOL.md Sec 5.6. Fully checked field-by-field like every other struct
+# (see tests/test_contract.py) once those patch releases are vendored.
 # =============================================================================
 
 class DeviceConfigStruct(Structure):
@@ -581,13 +582,7 @@ from .contract import contract_for as _contract_for
 
 
 def _verify_struct_sizes():
-    """Compare each variant's structs against its current firmware contract.
-
-    DeviceConfigStruct's total size is the correctness backstop for its
-    layout: the contract's `structs.DeviceConfigStruct.fields` list omits
-    FanProfile entirely (see the comment above DeviceConfigStruct), so there
-    is no per-field check to lean on here -- only the size.
-    """
+    """Compare each variant's structs against its current firmware contract."""
     checks = [
         (BENCHLAB_ORIGINAL_PRODUCT_ID, BENCHLAB_ORIGINAL_FIRMWARE_VERSION, {
             "VendorDataStruct": VendorDataStruct,

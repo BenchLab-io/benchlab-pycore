@@ -71,11 +71,12 @@ than raising. `NOP` remains reserved with no dispatch handler on any released
 firmware and has no corresponding function.
 
 `FaultConfigStruct` (128 bytes) and `DeviceConfigStruct`/`DeviceConfigStructBL2`
-(426 / 560 bytes) are new. Note the firmware contract's field list for
-`DeviceConfigStruct` omits `FanProfile` entirely -- pycore's struct follows
-the firmware's C layout directly instead, and only the total size is checked
-against the contract (see the comment above `DeviceConfigStruct` in
-`structures.py`).
+(426 / 560 bytes) are new. The vendored contracts are from `benchlab1/v0.5.2`
+and `benchlab2/v0.6.2` -- the initial `v0.5.1`/`v0.6.1` freeze shipped
+`DeviceConfigStruct` without a `FanProfile` entry in its field list
+([BENCHLAB-FW#50](https://github.com/BenchLab-io/BENCHLAB-FW/issues/50)),
+fixed in the `.2` patch releases. `FwVersion` is unchanged (still `5`/`6`) --
+only the contract JSON's field list was corrected, not the wire format.
 
 ---
 

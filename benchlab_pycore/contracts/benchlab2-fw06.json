@@ -279,7 +279,7 @@
         {
           "name": "Ts",
           "type": "int16_t",
-          "array": "8 /* TS1-4 plus HPWR1/2 IN/OUT */",
+          "array": "8",
           "offset": 32,
           "size": 16
         },
@@ -328,7 +328,7 @@
         {
           "name": "PowerReadings",
           "type": "PowerSensor",
-          "array": "23 /* 11 rails + 6 per-wire x 2 HPWR connectors */",
+          "array": "23",
           "offset": 56,
           "size": 276
         },
@@ -523,14 +523,14 @@
         {
           "name": "Ts",
           "type": "CalibrationValueStruct",
-          "array": "8 /* TS1-4 plus HPWR1/2 IN/OUT */",
+          "array": "8",
           "offset": 62,
           "size": 32
         },
         {
           "name": "TsB",
           "type": "TS_B",
-          "array": "8 /* TS1-4 plus HPWR1/2 IN/OUT */",
+          "array": "8",
           "offset": 94,
           "size": 8
         },
@@ -551,14 +551,14 @@
         {
           "name": "PowerReadingVoltage",
           "type": "CalibrationValueStruct",
-          "array": "23 /* 11 rails + 6 per-wire x 2 HPWR connectors */",
+          "array": "23",
           "offset": 110,
           "size": 92
         },
         {
           "name": "PowerReadingCurrent",
           "type": "CalibrationValueStruct",
-          "array": "23 /* 11 rails + 6 per-wire x 2 HPWR connectors */",
+          "array": "23",
           "offset": 202,
           "size": 92
         }
@@ -620,6 +620,13 @@
           "array": "32",
           "offset": 4,
           "size": 32
+        },
+        {
+          "name": "FanProfile",
+          "type": "FanConfigStruct",
+          "array": "27",
+          "offset": 36,
+          "size": 378
         },
         {
           "name": "RGBConfig",

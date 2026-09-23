@@ -516,6 +516,13 @@
           "size": 32
         },
         {
+          "name": "FanProfile",
+          "type": "FanConfigStruct",
+          "array": "27",
+          "offset": 36,
+          "size": 378
+        },
+        {
           "name": "RGBConfig",
           "type": "RGBConfigStruct",
           "array": "2",
