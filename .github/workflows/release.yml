@@ -36,6 +36,16 @@ jobs:
             exit 1
           fi
 
+      - name: Verify migrate.md has a section for this version
+        shell: bash
+        run: |
+          TAG_VERSION="${GITHUB_REF_NAME#v}"
+          if ! grep -qF "## Migrating to v${TAG_VERSION}" migrate.md; then
+            echo "migrate.md has no '## Migrating to v${TAG_VERSION}' section."
+            echo "It is attached to the GitHub release as a compatibility doc for downstream tools -- add a section before tagging."
+            exit 1
+          fi
+
       - name: Install dependencies
         run: |
           pip install -r requirements.txt
