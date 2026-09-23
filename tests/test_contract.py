@@ -49,7 +49,17 @@ _BY_VARIANT = {
         _COMMON,
         SensorStruct=st.SensorStructBL2,
         CalibrationStruct=st.CalibrationStructBL2,
+        FaultConfigStruct=st.FaultConfigStruct,
     ),
+}
+
+# DeviceConfigStruct is checked by size only (test_device_config_struct_size
+# below): the contract's `structs.DeviceConfigStruct.fields` omits
+# FanProfile entirely (see structures.py), so the field-level checks above
+# would report a false positive if it were added to _BY_VARIANT.
+_DEVICE_CONFIG_BY_VARIANT = {
+    "benchlab-original": st.DeviceConfigStruct,
+    "benchlab2": st.DeviceConfigStructBL2,
 }
 
 
@@ -65,6 +75,31 @@ def pairs_ids(pair):
 @pytest.fixture(params=ALL_PAIRS, ids=pairs_ids)
 def contract(request):
     """Every vendored contract, one test per (ProductId, FwVersion)."""
+    return contract_for(*request.param)
+
+
+def _latest_pairs():
+    """The newest vendored FwVersion for each ProductId.
+
+    Older contracts are historical record: a released firmware's wire
+    format is frozen forever, but pycore's hand-written ctypes classes
+    decode the *current* firmware only (see structures.py's
+    _verify_struct_sizes). A struct that grew a field between releases --
+    SensorStructBL2 gaining FaultStatus/FaultLog in fw06 -- correctly stops
+    matching the superseded contract, and that is not a bug to fix.
+    """
+    latest = {}
+    for pid, fw in ALL_PAIRS:
+        latest[pid] = max(latest.get(pid, -1), fw)
+    return sorted(latest.items())
+
+
+LATEST_PAIRS = _latest_pairs()
+
+
+@pytest.fixture(params=LATEST_PAIRS, ids=pairs_ids)
+def latest_contract(request):
+    """The current, in-use contract for each variant -- one per ProductId."""
     return contract_for(*request.param)
 
 
@@ -98,26 +133,26 @@ def test_unknown_firmware_raises_and_lists_known():
 # Struct sizes and field offsets
 # =============================================================================
 
-def test_struct_sizes(contract):
-    for name, cls in structs_for(contract).items():
-        assert ctypes.sizeof(cls) == contract.struct_size(name), (
-            "{} vs {} in {}".format(cls.__name__, name, contract.filename)
+def test_struct_sizes(latest_contract):
+    for name, cls in structs_for(latest_contract).items():
+        assert ctypes.sizeof(cls) == latest_contract.struct_size(name), (
+            "{} vs {} in {}".format(cls.__name__, name, latest_contract.filename)
         )
 
 
-def test_field_offsets_and_sizes(contract):
+def test_field_offsets_and_sizes(latest_contract):
     """Every field the contract records must sit at the same offset in ctypes.
 
     This is the check that makes the hand-written structures safe to keep: a
     field inserted or resized in firmware shows up here rather than as garbage
     sensor readings.
     """
-    for name, cls in structs_for(contract).items():
-        for field in contract.fields(name):
+    for name, cls in structs_for(latest_contract).items():
+        for field in latest_contract.fields(name):
             attr = getattr(cls, field["name"], None)
             assert attr is not None, (
                 "{} is missing field {} required by {} in {}".format(
-                    cls.__name__, field["name"], name, contract.filename)
+                    cls.__name__, field["name"], name, latest_contract.filename)
             )
             assert attr.offset == field["offset"], (
                 "{}.{} offset {} != contract {}".format(
@@ -129,16 +164,31 @@ def test_field_offsets_and_sizes(contract):
             )
 
 
-def test_no_extra_ctypes_fields(contract):
+def test_no_extra_ctypes_fields(latest_contract):
     """pycore must not define fields the firmware does not send."""
-    for name, cls in structs_for(contract).items():
-        contract_fields = {f["name"] for f in contract.fields(name)}
+    for name, cls in structs_for(latest_contract).items():
+        contract_fields = {f["name"] for f in latest_contract.fields(name)}
         ctypes_fields = {f[0] for f in cls._fields_}
         assert ctypes_fields <= contract_fields, (
             "{} has fields absent from {} in {}: {}".format(
-                cls.__name__, name, contract.filename,
+                cls.__name__, name, latest_contract.filename,
                 sorted(ctypes_fields - contract_fields))
         )
+
+
+def test_device_config_struct_size(latest_contract):
+    """DeviceConfigStruct, checked by total size only.
+
+    The contract's `structs.DeviceConfigStruct.fields` list omits
+    FanProfile[FAN_PROFILE_NUM][FAN_NUM] entirely (see PROTOCOL.md Sec 5.6
+    and the comment above DeviceConfigStruct in structures.py), so the
+    field-level offset/extra-field checks above cannot be applied to it --
+    total size is the only backstop the contract offers.
+    """
+    cls = _DEVICE_CONFIG_BY_VARIANT[latest_contract.variant]
+    assert ctypes.sizeof(cls) == latest_contract.struct_size("DeviceConfigStruct"), (
+        "{} vs DeviceConfigStruct in {}".format(cls.__name__, latest_contract.filename)
+    )
 
 
 # =============================================================================
@@ -190,19 +240,34 @@ def test_opcode_values_match(contract):
         assert member.value == opcode, "{} in {}".format(name, contract.filename)
 
 
-def test_no_commands_beyond_the_contract(contract):
-    """pycore must not declare commands no firmware implements.
+def test_no_commands_beyond_the_latest_contract():
+    """pycore must not declare commands no released firmware implements.
 
     Opcodes 15-20 were ported speculatively from the C# reference and removed
-    in v0.6.0; this keeps them from creeping back. The wire has no error
-    response, so an unimplemented command just times out -- an expensive way
-    to discover the command never existed.
+    in v0.6.0, then re-added once firmware actually implemented them in
+    v0.5.0 (ORIGINAL) / v0.6.0 (BL2). The wire has no error response, so an
+    unimplemented command just times out -- an expensive way to discover the
+    command never existed.
+
+    Checked against each variant's *latest* contract only: the command set
+    grows across firmware generations (e.g. NOP/READ_FAULT/STATUS did not
+    exist in fw02/fw03), so an older contract legitimately has fewer commands
+    than pycore declares. Only a command absent from every released firmware
+    would be a real problem.
     """
     declared = {c.name[len(_CMD_PREFIX):] for c in st.BENCHLAB_CMD}
-    extra = declared - set(contract.opcodes())
+    latest_by_variant = {}
+    for pid, fw in ALL_PAIRS:
+        latest_by_variant[pid] = max(latest_by_variant.get(pid, -1), fw)
+
+    known = set()
+    for pid, fw in latest_by_variant.items():
+        known |= set(contract_for(pid, fw).opcodes())
+
+    extra = declared - known
     assert not extra, (
-        "pycore declares commands absent from {}: {}".format(
-            contract.filename, sorted(extra))
+        "pycore declares commands absent from every latest contract: {}".format(
+            sorted(extra))
     )
 
 

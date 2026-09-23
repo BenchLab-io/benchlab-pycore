@@ -18,6 +18,14 @@ exposed by the BENCHLAB firmware (UART_CMD_* cases in usbd_cdc_if.c):
     UART_CMD_LOAD_CALIBRATION| load_calibration()
     UART_CMD_STORE_CALIBRATION| store_calibration()
     UART_CMD_ACTION          | send_action()
+    UART_CMD_READ_FAULT      | read_fault()          (BENCHLAB 2 only)
+    UART_CMD_WRITE_FAULT     | write_fault()          (BENCHLAB 2 only)
+    UART_CMD_LOAD_CONFIG     | load_config()
+    UART_CMD_STORE_CONFIG    | store_config()
+    UART_CMD_READ_DEFAULT_CONFIG| read_default_config()
+    UART_CMD_STATUS          | read_status()
+    UART_CMD_RESET           | reset()
+    UART_CMD_BOOTLOADER      | enter_bootloader()
 
 Notes:
     - All write functions send the raw bytes the firmware expects and return
@@ -70,6 +78,10 @@ from .structures import (
     RGBConfigStruct,
     CalibrationStruct,
     CalibrationStructBL2,
+    FaultConfigStruct,
+    DeviceConfigStruct,
+    DeviceConfigStructBL2,
+    CommandStatus,
 )
 from .serial_io import read_uart
 
@@ -148,28 +160,43 @@ def _checked_read(ser: serial.Serial, cmd_bytes: bytes, size: int, label: str) -
 # Ping / welcome
 # ===========================================================================
 
+_WELCOME_SHORT_LEN = 9    # "BENCHLAB\0" -- ORIGINAL fw<=4 / BL2 fw<=5
+_WELCOME_LONG_LEN = 32    # CONFIG_STR_LEN, NUL-padded product string --
+                          # ORIGINAL fw>=5 / BL2 fw>=6
+
+
 def ping(ser: serial.Serial) -> bool:
     """Send UART_CMD_WELCOME and verify the device responds with 'BENCHLAB'.
 
-    Mirrors the ``UART_CMD_WELCOME`` firmware case which transmits the
-    null-terminated string ``"BENCHLAB"`` (9 bytes including ``\\0``).
+    Mirrors the ``UART_CMD_WELCOME`` firmware case. The response is
+    version-gated: older firmware (ORIGINAL fw<=4, BL2 fw<=5) sends a fixed
+    9-byte ``"BENCHLAB\\0"``; current firmware (ORIGINAL fw>=5, BL2 fw>=6)
+    sends a 32-byte NUL-padded product string. Since the firmware version
+    isn't known yet at ping time, this reads up to 32 bytes and accepts
+    either length as long as it starts with ``"BENCHLAB"``.
 
     Args:
         ser: Open serial connection to the device.
 
     Returns:
-        True if the device acknowledged with the expected welcome string.
+        True if the device acknowledged with a "BENCHLAB"-prefixed welcome.
 
     Example::
 
         >>> assert ping(ser), "Device not found"
     """
-    WELCOME = b"BENCHLAB\x00"
-    data = read_uart(ser, BENCHLAB_CMD.UART_CMD_WELCOME, len(WELCOME))
-    if data is None:
-        logger.warning("ping: no response")
+    try:
+        ser.reset_input_buffer()
+        ser.write(BENCHLAB_CMD.UART_CMD_WELCOME.toByte())
+    except serial.SerialException as exc:
+        logger.error("ping: write failed: %s", exc)
         return False
-    ok = data == WELCOME
+
+    data = ser.read(_WELCOME_LONG_LEN)
+    if len(data) not in (_WELCOME_SHORT_LEN, _WELCOME_LONG_LEN):
+        logger.warning("ping: unexpected response length %d", len(data))
+        return False
+    ok = data.startswith(b"BENCHLAB")
     if not ok:
         logger.warning("ping: unexpected response %r", data)
     return ok
@@ -713,4 +740,220 @@ def send_action(
             "send_action: action=%d p1=%d p2=%d p3=%d",
             action, param1, param2, param3,
         )
+    return ok
+
+
+# ===========================================================================
+# Fault configuration (BENCHLAB 2 only)
+# ===========================================================================
+
+def read_fault(ser: serial.Serial) -> Optional[FaultConfigStruct]:
+    """Read the fault-protection configuration.
+
+    Mirrors ``UART_CMD_READ_FAULT`` (single-byte command). BENCHLAB 2 only --
+    on ORIGINAL this opcode falls through to the unknown-opcode case, so the
+    read will time out and return None.
+
+    Args:
+        ser: Open serial connection to the device.
+
+    Returns:
+        :class:`FaultConfigStruct` on success, or None on failure.
+
+    Example::
+
+        >>> cfg = read_fault(ser)
+        >>> print(cfg.MaxLimit[Fault.OCP_CPU1])
+    """
+    data = read_uart(ser, BENCHLAB_CMD.UART_CMD_READ_FAULT, sizeof(FaultConfigStruct))
+    if data is None:
+        logger.warning("read_fault: failed")
+        return None
+    return FaultConfigStruct.from_buffer_copy(data)
+
+
+def write_fault(ser: serial.Serial, config: FaultConfigStruct) -> bool:
+    """Write the fault-protection configuration.
+
+    Mirrors ``UART_CMD_WRITE_FAULT``. Payload layout::
+
+        [cmd(1)] [FaultConfigStruct(128 bytes)]
+
+    BENCHLAB 2 only -- on ORIGINAL this opcode falls through to the
+    unknown-opcode case.
+
+    Args:
+        ser:    Open serial connection to the device.
+        config: :class:`FaultConfigStruct` to write.
+
+    Returns:
+        True if bytes were sent (no ACK from firmware).
+
+    Example::
+
+        >>> cfg = read_fault(ser)
+        >>> cfg.MaxLimit[Fault.OCP_CPU1] = 50
+        >>> write_fault(ser, cfg)
+        True
+    """
+    payload = bytes([BENCHLAB_CMD.UART_CMD_WRITE_FAULT]) + _struct_to_bytes(config)
+    ok = _write(ser, payload)
+    if ok:
+        logger.info("write_fault: wrote fault configuration")
+    return ok
+
+
+# ===========================================================================
+# Device configuration
+# ===========================================================================
+
+def load_config(ser: serial.Serial) -> bool:
+    """Reload DeviceConfig from EEPROM into the active configuration.
+
+    Mirrors ``UART_CMD_LOAD_CONFIG`` (single-byte command, no response,
+    fire-and-forget -- same shape as ``load_calibration``). Deferred: the
+    firmware queues this on the same action queue as
+    LOAD_CALIBRATION/STORE_CALIBRATION.
+
+    Args:
+        ser: Open serial connection to the device.
+
+    Returns:
+        True if bytes were sent (no ACK from firmware).
+    """
+    ok = _write(ser, BENCHLAB_CMD.UART_CMD_LOAD_CONFIG.toByte())
+    if ok:
+        logger.info("load_config: requested EEPROM reload")
+    return ok
+
+
+def store_config(ser: serial.Serial) -> bool:
+    """Write the active DeviceConfig to EEPROM.
+
+    Mirrors ``UART_CMD_STORE_CONFIG`` (single-byte command, no response,
+    fire-and-forget). Destructive and unacknowledged, like
+    ``store_calibration``.
+
+    Args:
+        ser: Open serial connection to the device.
+
+    Returns:
+        True if bytes were sent (no ACK from firmware).
+    """
+    ok = _write(ser, BENCHLAB_CMD.UART_CMD_STORE_CONFIG.toByte())
+    if ok:
+        logger.info("store_config: requested EEPROM write")
+    return ok
+
+
+def read_default_config(
+    ser: serial.Serial,
+    product_id: Optional[int] = None,
+) -> Optional[Union[DeviceConfigStruct, DeviceConfigStructBL2]]:
+    """Read the compiled-in default device configuration.
+
+    Mirrors ``UART_CMD_READ_DEFAULT_CONFIG`` (single-byte command). Returns
+    the firmware's built-in ``DeviceConfigDefault``, not the live EEPROM
+    copy.
+
+    Args:
+        ser:        Open serial connection to the device.
+        product_id: Product ID to select the correct configuration
+                    structure. Use ``BENCHLAB_BL2_PRODUCT_ID`` for BL2
+                    devices, or ``BENCHLAB_ORIGINAL_PRODUCT_ID`` / None for
+                    ORIGINAL.
+
+    Returns:
+        :class:`DeviceConfigStructBL2` for BL2 devices,
+        :class:`DeviceConfigStruct` for ORIGINAL devices,
+        or None on failure.
+
+    Example::
+
+        >>> cfg = read_default_config(ser, product_id=info["ProductId"])
+        >>> print(cfg.FriendlyName)
+    """
+    if product_id == BENCHLAB_BL2_PRODUCT_ID:
+        struct_type = DeviceConfigStructBL2
+    else:
+        struct_type = DeviceConfigStruct
+
+    data = read_uart(ser, BENCHLAB_CMD.UART_CMD_READ_DEFAULT_CONFIG, sizeof(struct_type))
+    if data is None:
+        logger.warning("read_default_config: failed")
+        return None
+    return struct_type.from_buffer_copy(data)
+
+
+# ===========================================================================
+# Status
+# ===========================================================================
+
+def read_status(ser: serial.Serial) -> Optional[CommandStatus]:
+    """Read the outcome of the previous command.
+
+    Mirrors ``UART_CMD_STATUS`` (single-byte command, 1-byte response). This
+    reports the status of the command handled *before* STATUS, not of
+    STATUS itself -- sending STATUS twice in a row returns the result of
+    whatever came before the first STATUS.
+
+    Args:
+        ser: Open serial connection to the device.
+
+    Returns:
+        :class:`CommandStatus` on success, or None on failure.
+
+    Example::
+
+        >>> send_action(ser, action=99)     # invalid action
+        >>> read_status(ser)
+        <CommandStatus.BAD_PARAMETER: 2>
+    """
+    data = read_uart(ser, BENCHLAB_CMD.UART_CMD_STATUS, 1)
+    if data is None:
+        logger.warning("read_status: failed")
+        return None
+    return CommandStatus(data[0])
+
+
+# ===========================================================================
+# Reset / bootloader
+# ===========================================================================
+
+def reset(ser: serial.Serial) -> bool:
+    """Reset the device.
+
+    Mirrors ``UART_CMD_RESET`` (single-byte command, no response). The
+    firmware only sets a flag here; the actual MCU reset happens from the
+    main loop's 100 ms task tick, so the device disappears from the bus up
+    to ~100 ms after this call returns.
+
+    Args:
+        ser: Open serial connection to the device.
+
+    Returns:
+        True if bytes were sent (no ACK from firmware).
+    """
+    ok = _write(ser, BENCHLAB_CMD.UART_CMD_RESET.toByte())
+    if ok:
+        logger.info("reset: requested device reset")
+    return ok
+
+
+def enter_bootloader(ser: serial.Serial) -> bool:
+    """Jump the device into the ROM DFU bootloader.
+
+    Mirrors ``UART_CMD_BOOTLOADER`` (single-byte command, no response). Like
+    ``reset``, the actual jump happens on the next 100 ms task tick, so the
+    device disappears from the bus shortly after this call returns.
+
+    Args:
+        ser: Open serial connection to the device.
+
+    Returns:
+        True if bytes were sent (no ACK from firmware).
+    """
+    ok = _write(ser, BENCHLAB_CMD.UART_CMD_BOOTLOADER.toByte())
+    if ok:
+        logger.info("enter_bootloader: requested DFU bootloader jump")
     return ok

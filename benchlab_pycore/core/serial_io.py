@@ -13,9 +13,13 @@ Example:
     >>> from benchlab_pycore.core import get_fleet_info, read_sensors
     >>> devices = get_fleet_info()
     >>> if devices:
-    >>>     # Connect to first device
+    >>>     # Connect to first device. Disable pyserial's automatic RTS/DTR
+    >>>     # handling: on Windows it can suppress the SET_CONTROL_LINE_STATE
+    >>>     # transfer that current firmware (ORIGINAL fw>=5, BL2 fw>=6) uses
+    >>>     # to push an unsolicited welcome message on connect.
     >>>     import serial
-    >>>     ser = serial.Serial(devices[0]['port'], 115200, timeout=1)
+    >>>     ser = serial.Serial(devices[0]['port'], 115200, timeout=1,
+    >>>                          rtscts=False, dsrdtr=False)
     >>>     sensors = read_sensors(ser)
     >>>     ser.close()
 """
@@ -33,6 +37,8 @@ from benchlab_pycore.core.structures import (
     VendorDataStruct,
     SensorStructOriginal,
     SensorStructBL2,
+    SensorStructBL2Legacy,
+    BENCHLAB_BL2_SENSOR_FAULT_FIELDS_FROM,
     BENCHLAB_CMD,
     BENCHLAB_ORIGINAL_PRODUCT_ID,
     BENCHLAB_BL2_PRODUCT_ID,
@@ -51,6 +57,10 @@ if not logger.handlers:
 
 # VID:PID for all BENCHLAB devices (checked case-insensitively).
 _BENCHLAB_VID_PID = "VID:PID=0483:5740"
+
+# CONFIG_STR_LEN -- max size of the unsolicited/queried welcome push (see
+# _drain_unsolicited_welcome and config_io.ping's WELCOME version gating).
+_WELCOME_LONG_LEN = 32
 
 
 # --- Serial port helpers ---
@@ -107,7 +117,9 @@ def find_benchlab_devices() -> List[Dict[str, str]]:
         port = port_info["port"]
         uid, fw = "?", "?"
         try:
-            with serial.Serial(port, baudrate=115200, timeout=1) as ser:
+            with serial.Serial(port, baudrate=115200, timeout=1,
+                                rtscts=False, dsrdtr=False) as ser:
+                _drain_unsolicited_welcome(ser)
                 device_info = read_device(ser)
                 uid = read_uid(ser) or "?"
                 fw = str(device_info.get("FwVersion")) if device_info else "?"
@@ -141,7 +153,9 @@ def get_fleet_info() -> List[Dict[str, Union[str, int]]]:
 
     for port in benchlab_ports:
         try:
-            with serial.Serial(port, 115200, timeout=1) as ser:
+            with serial.Serial(port, 115200, timeout=1,
+                                rtscts=False, dsrdtr=False) as ser:
+                _drain_unsolicited_welcome(ser)
                 device_info = read_device(ser)
                 uid = read_uid(ser)
                 fleet.append(
@@ -159,6 +173,26 @@ def get_fleet_info() -> List[Dict[str, Union[str, int]]]:
         except Exception as e:
             logger.warning("Failed to get device info from %s: %s", port, e)
     return fleet
+
+
+def _drain_unsolicited_welcome(ser: serial.Serial) -> None:
+    """Discard an unsolicited welcome push that may follow opening the port.
+
+    On ORIGINAL fw>=5 / BL2 fw>=6, asserting RTS makes the device push a
+    32-byte "BENCHLAB"-prefixed welcome message before any command is sent.
+    pyserial normally handles the RTS assert as part of opening the port,
+    but on Windows the underlying SET_CONTROL_LINE_STATE transfer can be
+    suppressed or coalesced even though ``ser.rts`` reads back True right
+    after ``open()`` -- so the push may or may not have already happened by
+    the time this runs. Read with a short timeout and discard whatever
+    arrives; older firmware sends nothing here, so this is a no-op for it.
+    """
+    original_timeout = ser.timeout
+    try:
+        ser.timeout = 0.05
+        ser.read(_WELCOME_LONG_LEN)
+    finally:
+        ser.timeout = original_timeout
 
 
 # --- UART helpers ---
@@ -274,7 +308,7 @@ def read_sensors(
     ser: serial.Serial,
     product_id: Optional[int] = None,
     fw_version: Optional[int] = None
-) -> Optional[Union[SensorStructOriginal, SensorStructBL2]]:
+) -> Optional[Union[SensorStructOriginal, SensorStructBL2, SensorStructBL2Legacy]]:
     """Read all sensors from the device.
 
     Args:
@@ -282,11 +316,18 @@ def read_sensors(
         product_id (Optional[int]): Product ID to determine which sensor structure
                                     to use. Use BENCHLAB_BL2_PRODUCT_ID for BL2 devices,
                                     or BENCHLAB_ORIGINAL_PRODUCT_ID (or None) for original.
+        fw_version (Optional[int]): FwVersion, used on BL2 to pick between the
+                                    fw05+ struct (with FaultStatus/FaultLog) and
+                                    the shorter pre-fw05 layout. If omitted, it
+                                    is probed from the device (see
+                                    _cached_identity).
 
     Returns:
-        Optional[Union[SensorStructOriginal, SensorStructBL2]]: Sensor structure object
-            containing all sensor data, or None if read failed.
-            - Returns SensorStructBL2 for BL2 devices (product_id=0x11)
+        Optional[Union[SensorStructOriginal, SensorStructBL2, SensorStructBL2Legacy]]:
+            Sensor structure object containing all sensor data, or None if
+            read failed.
+            - Returns SensorStructBL2 for BL2 devices on fw05+
+            - Returns SensorStructBL2Legacy for BL2 devices on fw03-fw04
             - Returns SensorStructOriginal for original devices (default)
 
     Note:
@@ -309,15 +350,24 @@ def read_sensors(
         product_id, fw_version = _cached_identity(ser, product_id)
 
     if product_id == BENCHLAB_BL2_PRODUCT_ID:
+        # READ_SENSORS grew FaultStatus/FaultLog in fw05 -- a device still on
+        # fw03/fw04 sends the shorter legacy layout and a fixed 384-byte read
+        # would come up short against it.
+        is_legacy = (
+            fw_version is not None
+            and fw_version < BENCHLAB_BL2_SENSOR_FAULT_FIELDS_FROM
+        )
+        struct_type = SensorStructBL2Legacy if is_legacy else SensorStructBL2
+
         buffer = read_uart(
             ser,
             BENCHLAB_CMD.UART_CMD_READ_SENSORS,
-            sizeof(SensorStructBL2)
+            sizeof(struct_type)
         )
         if buffer is None:
             logger.warning("Failed to read sensors from BENCHLAB-2 device")
             return None
-        sensors = SensorStructBL2.from_buffer_copy(buffer)
+        sensors = struct_type.from_buffer_copy(buffer)
         _tag_identity(sensors, product_id, fw_version)
         return sensors
     else:

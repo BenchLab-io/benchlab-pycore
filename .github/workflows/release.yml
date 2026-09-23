@@ -36,6 +36,16 @@ jobs:
             exit 1
           fi
 
+      - name: Verify migrate.md has a section for this version
+        shell: bash
+        run: |
+          TAG_VERSION="${GITHUB_REF_NAME#v}"
+          if ! grep -qF "## Migrating to v${TAG_VERSION}" migrate.md; then
+            echo "migrate.md has no '## Migrating to v${TAG_VERSION}' section."
+            echo "It is attached to the GitHub release as a compatibility doc for downstream tools -- add a section before tagging."
+            exit 1
+          fi
+
       - name: Install dependencies
         run: |
           pip install -r requirements.txt
@@ -72,6 +82,8 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
+
       - uses: actions/download-artifact@v4
         with:
           name: dist
@@ -80,4 +92,9 @@ jobs:
       - uses: softprops/action-gh-release@v2
         with:
           generate_release_notes: true
-          files: dist/*
+          # migrate.md tracks breaking changes and new features per version --
+          # attach it so downstream tools can check compatibility for this
+          # exact release without cloning the repo at a matching commit.
+          files: |
+            dist/*
+            migrate.md
