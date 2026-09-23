@@ -86,3 +86,6 @@ Desktop.ini
 *.csv
 sensor_logs/
 device_test_output/
+
+# Local scratch scripts for manual hardware verification, not shipped
+examples/
