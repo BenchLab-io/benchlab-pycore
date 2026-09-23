@@ -13,9 +13,13 @@ Example:
     >>> from benchlab_pycore.core import get_fleet_info, read_sensors
     >>> devices = get_fleet_info()
     >>> if devices:
-    >>>     # Connect to first device
+    >>>     # Connect to first device. Disable pyserial's automatic RTS/DTR
+    >>>     # handling: on Windows it can suppress the SET_CONTROL_LINE_STATE
+    >>>     # transfer that current firmware (ORIGINAL fw>=5, BL2 fw>=6) uses
+    >>>     # to push an unsolicited welcome message on connect.
     >>>     import serial
-    >>>     ser = serial.Serial(devices[0]['port'], 115200, timeout=1)
+    >>>     ser = serial.Serial(devices[0]['port'], 115200, timeout=1,
+    >>>                          rtscts=False, dsrdtr=False)
     >>>     sensors = read_sensors(ser)
     >>>     ser.close()
 """
@@ -51,6 +55,10 @@ if not logger.handlers:
 
 # VID:PID for all BENCHLAB devices (checked case-insensitively).
 _BENCHLAB_VID_PID = "VID:PID=0483:5740"
+
+# CONFIG_STR_LEN -- max size of the unsolicited/queried welcome push (see
+# _drain_unsolicited_welcome and config_io.ping's WELCOME version gating).
+_WELCOME_LONG_LEN = 32
 
 
 # --- Serial port helpers ---
@@ -107,7 +115,9 @@ def find_benchlab_devices() -> List[Dict[str, str]]:
         port = port_info["port"]
         uid, fw = "?", "?"
         try:
-            with serial.Serial(port, baudrate=115200, timeout=1) as ser:
+            with serial.Serial(port, baudrate=115200, timeout=1,
+                                rtscts=False, dsrdtr=False) as ser:
+                _drain_unsolicited_welcome(ser)
                 device_info = read_device(ser)
                 uid = read_uid(ser) or "?"
                 fw = str(device_info.get("FwVersion")) if device_info else "?"
@@ -141,7 +151,9 @@ def get_fleet_info() -> List[Dict[str, Union[str, int]]]:
 
     for port in benchlab_ports:
         try:
-            with serial.Serial(port, 115200, timeout=1) as ser:
+            with serial.Serial(port, 115200, timeout=1,
+                                rtscts=False, dsrdtr=False) as ser:
+                _drain_unsolicited_welcome(ser)
                 device_info = read_device(ser)
                 uid = read_uid(ser)
                 fleet.append(
@@ -159,6 +171,26 @@ def get_fleet_info() -> List[Dict[str, Union[str, int]]]:
         except Exception as e:
             logger.warning("Failed to get device info from %s: %s", port, e)
     return fleet
+
+
+def _drain_unsolicited_welcome(ser: serial.Serial) -> None:
+    """Discard an unsolicited welcome push that may follow opening the port.
+
+    On ORIGINAL fw>=5 / BL2 fw>=6, asserting RTS makes the device push a
+    32-byte "BENCHLAB"-prefixed welcome message before any command is sent.
+    pyserial normally handles the RTS assert as part of opening the port,
+    but on Windows the underlying SET_CONTROL_LINE_STATE transfer can be
+    suppressed or coalesced even though ``ser.rts`` reads back True right
+    after ``open()`` -- so the push may or may not have already happened by
+    the time this runs. Read with a short timeout and discard whatever
+    arrives; older firmware sends nothing here, so this is a no-op for it.
+    """
+    original_timeout = ser.timeout
+    try:
+        ser.timeout = 0.05
+        ser.read(_WELCOME_LONG_LEN)
+    finally:
+        ser.timeout = original_timeout
 
 
 # --- UART helpers ---

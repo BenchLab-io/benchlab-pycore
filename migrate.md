@@ -1,6 +1,74 @@
-# Migration Guide to benchlab-pycore v0.6.0
+# Migration Guide to benchlab-pycore v0.7.0
 
 This guide covers breaking changes and new features introduced in each version.
+
+---
+
+## Migrating to v0.7.0
+
+### Firmware version bump (action required if you pin firmware)
+
+Current firmware moves to ORIGINAL fw05 (`benchlab1/v0.5.1`) and BL2 fw06
+(`benchlab2/v0.6.1`). `BENCHLAB_ORIGINAL_FIRMWARE_VERSION` is now `5`
+(previously `3`); `BENCHLAB_BL2_FIRMWARE_VERSION` is now `6` (previously `4`).
+Both are wire-format-breaking bumps -- devices still running older firmware
+continue to work (older contracts remain vendored), but `read_sensors()` and
+the new commands below decode according to the *current* firmware's layout.
+
+### `SensorStructBL2` gained `FaultStatus` / `FaultLog` (BL2 only)
+
+Two trailing `uint64` bitmask fields, one bit per `Fault` enum member (34
+total: OTP/OCP/wire-OCP/current-imbalance faults). `FaultStatus` is the live
+fault state; `FaultLog` is the latched (sticky) history. `SensorStructOriginal`
+is unchanged -- ORIGINAL has no fault-detection hardware.
+
+### `WELCOME` response size is now version-gated
+
+`ping()` used to expect exactly the 9-byte `"BENCHLAB\0"` response. Firmware
+`>= fw05` (ORIGINAL) / `>= fw06` (BL2) sends a 32-byte NUL-padded product
+string instead. `ping()` now accepts either length and checks for a leading
+`"BENCHLAB"` prefix, so no caller changes are needed -- but if you called
+`read_uart(ser, BENCHLAB_CMD.UART_CMD_WELCOME, 9)` directly instead of
+`ping()`, that read will now come up short against current firmware.
+
+Current firmware also pushes this same 32-byte message **unsolicited** when
+the host asserts RTS on connect. If you open your own `serial.Serial(...)`
+rather than going through this library's discovery helpers, pass
+`rtscts=False, dsrdtr=False` and be prepared to drain/discard a leading
+`"BENCHLAB"`-prefixed block that arrives before your first request -- see the
+example in `serial_io.py`'s module docstring. This mainly affects Windows,
+where pyserial's default flow-control handling can suppress the underlying
+`SET_CONTROL_LINE_STATE` transfer even though `Serial.rts` reads back `True`
+immediately after `open()`.
+
+### New commands: fault configuration, device configuration, status, reset
+
+Config/reset/bootloader/status opcodes that a previous release (`removed in
+v0.6.0`, see below) had speculatively implemented against *no* firmware are
+now real, because ORIGINAL fw05 / BL2 fw06 actually implement them:
+
+| Command | Function |
+|---|---|
+| `READ_FAULT` (BL2 only) | `read_fault()` |
+| `WRITE_FAULT` (BL2 only) | `write_fault()` |
+| `LOAD_CONFIG` | `load_config()` |
+| `STORE_CONFIG` | `store_config()` |
+| `READ_DEFAULT_CONFIG` | `read_default_config()` |
+| `STATUS` | `read_status()` |
+| `RESET` | `reset()` |
+| `BOOTLOADER` | `enter_bootloader()` |
+
+`READ_FAULT`/`WRITE_FAULT` fall through to the unknown-opcode case on
+ORIGINAL (no fault hardware) -- `read_fault()` returns `None` there rather
+than raising. `NOP` remains reserved with no dispatch handler on any released
+firmware and has no corresponding function.
+
+`FaultConfigStruct` (128 bytes) and `DeviceConfigStruct`/`DeviceConfigStructBL2`
+(426 / 560 bytes) are new. Note the firmware contract's field list for
+`DeviceConfigStruct` omits `FanProfile` entirely -- pycore's struct follows
+the firmware's C layout directly instead, and only the total size is checked
+against the contract (see the comment above `DeviceConfigStruct` in
+`structures.py`).
 
 ---
 

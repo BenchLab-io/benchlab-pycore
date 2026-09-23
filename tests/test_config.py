@@ -143,28 +143,45 @@ def test_rgb_config_struct_size_positive():
 # -----------------------
 # Test ping
 # -----------------------
+#
+# ping() talks to `ser` directly (not via read_uart) because the WELCOME
+# response length is version-gated and not known ahead of the call -- see
+# config_io.py. Mock `ser.read`/`ser.write` rather than read_uart.
 
-@patch("benchlab_pycore.core.config_io.read_uart")
-def test_ping_success(mock_read_uart):
-    """ping() returns True when device responds with BENCHLAB\\0."""
-    mock_read_uart.return_value = b"BENCHLAB\x00"
+def test_ping_success_short_welcome():
+    """ping() returns True for the pre-fw05/fw06 9-byte welcome."""
     mock_ser = Mock()
+    mock_ser.read.return_value = b"BENCHLAB\x00"
     assert ping(mock_ser) is True
-    mock_read_uart.assert_called_once_with(mock_ser, BENCHLAB_CMD.UART_CMD_WELCOME, 9)
+    mock_ser.write.assert_called_once_with(BENCHLAB_CMD.UART_CMD_WELCOME.toByte())
 
 
-@patch("benchlab_pycore.core.config_io.read_uart")
-def test_ping_wrong_response(mock_read_uart):
+def test_ping_success_long_welcome():
+    """ping() returns True for the fw05/fw06+ 32-byte NUL-padded welcome."""
+    mock_ser = Mock()
+    mock_ser.read.return_value = b"BENCHLAB\x00" + b"\x00" * 23
+    assert ping(mock_ser) is True
+
+
+def test_ping_wrong_response():
     """ping() returns False when device responds with unexpected data."""
-    mock_read_uart.return_value = b"WRONGDEV\x00"
-    assert ping(Mock()) is False
+    mock_ser = Mock()
+    mock_ser.read.return_value = b"WRONGDEV\x00"
+    assert ping(mock_ser) is False
 
 
-@patch("benchlab_pycore.core.config_io.read_uart")
-def test_ping_no_response(mock_read_uart):
-    """ping() returns False when read_uart returns None."""
-    mock_read_uart.return_value = None
-    assert ping(Mock()) is False
+def test_ping_no_response():
+    """ping() returns False when nothing is read back."""
+    mock_ser = Mock()
+    mock_ser.read.return_value = b""
+    assert ping(mock_ser) is False
+
+
+def test_ping_write_failure():
+    """ping() returns False when the write raises."""
+    mock_ser = Mock()
+    mock_ser.write.side_effect = serial.SerialException("boom")
+    assert ping(mock_ser) is False
 
 
 # -----------------------

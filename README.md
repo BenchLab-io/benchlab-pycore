@@ -34,7 +34,11 @@ for device in devices:
     print(f"  Port: {device['port']}, UID: {device['uid']}, Firmware: {device['firmware']}")
 
 if devices:
-    ser = serial.Serial(devices[0]['port'], 115200, timeout=1)
+    # rtscts=False, dsrdtr=False: current firmware (ORIGINAL fw>=5, BL2 fw>=6)
+    # pushes an unsolicited welcome message on RTS assert; pyserial's default
+    # flow-control handling can suppress that transfer on Windows.
+    ser = serial.Serial(devices[0]['port'], 115200, timeout=1,
+                         rtscts=False, dsrdtr=False)
 
     # Read device info to determine variant
     info = read_device(ser)
@@ -65,7 +69,7 @@ from benchlab_pycore.core import (
 )
 
 def read_with_variant_detection(port):
-    ser = serial.Serial(port, 115200, timeout=1)
+    ser = serial.Serial(port, 115200, timeout=1, rtscts=False, dsrdtr=False)
     try:
         device_info = read_device(ser)
         if not device_info:
@@ -106,7 +110,7 @@ from benchlab_pycore.core import (
     CAL_USER, CAL_FACTORY,
 )
 
-ser = serial.Serial("COM4", 115200, timeout=1)
+ser = serial.Serial("COM4", 115200, timeout=1, rtscts=False, dsrdtr=False)
 
 # Read device name
 print(f"Device name: {read_name(ser)}")
@@ -274,8 +278,79 @@ Each `CalibrationValueStruct` entry has:
 ### Configuration — Actions
 
 - **`send_action(ser, action, param1=0, param2=0, param3=0)`** → `bool`
-  Sends a one-shot action. Action codes from `config.h`:
-  `CONFIG_ACTION_SAVE=0`, `CONFIG_ACTION_LOAD=1`, `CONFIG_ACTION_RESET=2`.
+  Sends a one-shot action that drives the front-panel button outputs
+  (pass-through to the connected system, not a BENCHLAB control): `action=1`
+  (`ACTION_BUTTON`) with `param1` = a `BUTTON` value (`POWER=0`, `RESET=1`,
+  `OTHER=2`, `5VSB=3` — BL2 only), `param2` = level (0=released,
+  non-zero=pressed), `param3` = hold duration in 100 ms ticks (`0` = latch
+  until released by a later call; `N` = auto-release after `N × 100 ms`).
+  `action=2` (`ACTION_BUZZER`, BL2 only) fires a fixed 500 ms beep and
+  ignores `param1..3`; it is a silent no-op on ORIGINAL.
+
+### Configuration — Fault Protection (BL2 only)
+
+Fault protection has no opcode on ORIGINAL — it falls through to the
+unknown-opcode case there, so these functions return `None`/`False` rather
+than raising.
+
+- **`read_fault(ser)`** → `Optional[FaultConfigStruct]`
+  Reads the fault-protection configuration.
+
+- **`write_fault(ser, config)`** → `bool`
+  Writes the fault-protection configuration.
+
+`FaultConfigStruct` fields (128 bytes, packed):
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `ActionEnable[6]` | `uint64[6]` | Per-`FaultAction` bitmask, one bit per `Fault` member |
+| `ActionWaitTime[6]` | `uint8[6]` | Per-`FaultAction` wait time, in 1000 ms intervals |
+| `MaxLimit[34]` | `uint8[34]` | Per-`Fault` trip threshold (0.1V/0.5A/1°C/10W units depending on fault type), indexed by `Fault` |
+| `MinDuration[34]` | `uint8[34]` | Per-`Fault` minimum duration before tripping, in 1000 ms intervals, indexed by `Fault` |
+
+`FaultAction`: `LED=0`, `BUZZER=1`, `SOFT_POWER=2`, `HARD_POWER=3`, `RESET=4`, `FIVE_VSB_POWER=5`.
+`Fault` has 34 members covering OTP (over-temp), OCP (over-current), wire-level OCP, and current-imbalance conditions — see `structures.py` for the full list.
+
+`SensorStructBL2` also exposes `FaultStatus`/`FaultLog` (`uint64` bitmasks over `Fault`, live state and latched history respectively) via `read_sensors()`.
+
+### Configuration — Device Configuration
+
+- **`read_default_config(ser, product_id=None)`** → `Optional[Union[DeviceConfigStruct, DeviceConfigStructBL2]]`
+  Reads the compiled-in default device configuration (not the live EEPROM
+  copy). Selects the correct struct automatically.
+
+- **`load_config(ser)`** → `bool`
+  Reloads the active configuration from EEPROM. Fire-and-forget, no response.
+
+- **`store_config(ser)`** → `bool`
+  Writes the active configuration to EEPROM. Fire-and-forget, no response,
+  destructive.
+
+`DeviceConfigStruct` / `DeviceConfigStructBL2` fields:
+
+| Field | Description |
+|-------|-------------|
+| `Version` | Always `0`; carries no information — use `FwVersion` from `read_device()` instead |
+| `Crc` | CRC over the struct excluding the first 4 bytes |
+| `FriendlyName[32]` | Device name, NUL-padded |
+| `FanProfile[3][9]` | All fan profiles for all 9 channels (`FanConfigStruct`) |
+| `RGBConfig[2]` | Both RGB profiles (`RGBConfigStruct`) |
+| `FaultConfig` | **[BL2]** Fault-protection configuration (`FaultConfigStruct`) |
+
+### Configuration — Status / Reset
+
+- **`read_status(ser)`** → `Optional[CommandStatus]`
+  Reads the outcome of the *previous* command sent (not of `STATUS` itself).
+  `CommandStatus`: `OK=0`, `BAD_LENGTH=1`, `BAD_PARAMETER=2`,
+  `UNKNOWN_OPCODE=3`, `BUSY=4`.
+
+- **`reset(ser)`** → `bool`
+  Resets the device. Fire-and-forget; the device disappears from the bus up
+  to ~100 ms after this call returns.
+
+- **`enter_bootloader(ser)`** → `bool`
+  Jumps the device into the ROM DFU bootloader. Fire-and-forget, same timing
+  as `reset()`.
 
 ### Sensor Data Format
 
@@ -330,7 +405,7 @@ import paho.mqtt.client as mqtt
 from benchlab_pycore.core import get_fleet_info, read_device, read_sensors, translate_sensor_struct
 
 def publish_sensor_data(client, device_port):
-    ser = serial.Serial(device_port, 115200, timeout=1)
+    ser = serial.Serial(device_port, 115200, timeout=1, rtscts=False, dsrdtr=False)
     try:
         info = read_device(ser)
         pid = info['ProductId'] if info else None
@@ -357,7 +432,7 @@ from benchlab_pycore.core import get_fleet_info, read_device, read_sensors, tran
 
 def log_device_data(device_port, duration_seconds=60, interval_seconds=1):
     filename = f"{device_port}_sensor_log.csv"
-    ser = serial.Serial(device_port, 115200, timeout=1)
+    ser = serial.Serial(device_port, 115200, timeout=1, rtscts=False, dsrdtr=False)
     info = read_device(ser)
     pid = info['ProductId'] if info else None
 
@@ -383,7 +458,7 @@ for device in get_fleet_info():
 
 ## Requirements
 
-- Python 3.8+
+- Python 3.9+
 - pyserial >= 3.5
 
 ## Development
