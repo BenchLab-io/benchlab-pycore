@@ -202,6 +202,13 @@ class SensorStructBL2(Structure):
 # fw05 is the first BL2 firmware to send FaultStatus/FaultLog on READ_SENSORS.
 BENCHLAB_BL2_SENSOR_FAULT_FIELDS_FROM = 5
 
+# WRITE_CALIBRATION became a whole-struct replace ([cmd][full struct], no
+# offset byte, no partial write) from these firmware versions on --
+# ORIGINAL fw06 (benchlab1/v0.6.0), BL2 fw07 (benchlab2/v0.7.0). Below these,
+# it is the older [cmd][offset][chunk] partial-write wire format.
+BENCHLAB_ORIGINAL_WRITE_CALIBRATION_WHOLE_STRUCT_FROM = 6
+BENCHLAB_BL2_WRITE_CALIBRATION_WHOLE_STRUCT_FROM = 7
+
 
 # =============================================================================
 # UART Command Enum
