@@ -35,6 +35,14 @@
       "file": "benchlab-original-fw05.json"
     },
     {
+      "product_id": 16,
+      "fw_version": 6,
+      "variant": "benchlab-original",
+      "name": "BENCHLAB ORIGINAL",
+      "status": "released",
+      "file": "benchlab-original-fw06.json"
+    },
+    {
       "product_id": 17,
       "fw_version": 3,
       "variant": "benchlab2",
@@ -65,6 +73,14 @@
       "name": "BENCHLAB 2",
       "status": "released",
       "file": "benchlab2-fw06.json"
+    },
+    {
+      "product_id": 17,
+      "fw_version": 7,
+      "variant": "benchlab2",
+      "name": "BENCHLAB 2",
+      "status": "released",
+      "file": "benchlab2-fw07.json"
     }
   ]
 }

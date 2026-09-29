@@ -1,8 +1,38 @@
-# Migration Guide to benchlab-pycore v0.7.0
+# Migration Guide to benchlab-pycore v0.8.0
 
 This guide covers breaking changes and new features introduced in each version.
 
 ---
+
+## Migrating to v0.8.0
+
+### Firmware version bump (action required if you pin firmware)
+
+Current firmware moves to ORIGINAL fw06 (`benchlab1/v0.6.0`) and BL2 fw07
+(`benchlab2/v0.7.0`). `BENCHLAB_ORIGINAL_FIRMWARE_VERSION` is now `6`
+(previously `5`); `BENCHLAB_BL2_FIRMWARE_VERSION` is now `7` (previously `6`).
+Both are wire-format-breaking bumps -- devices still running older firmware
+continue to work (older contracts remain vendored), but pycore now targets
+the new generation by default. Struct shapes are unchanged from fw05/fw06;
+this is a version-gate bump only.
+
+### `cal-offset-8bit` advisory fixed on BL2 fw07+
+
+`WRITE_CALIBRATION` now replaces the whole calibration struct in one call
+instead of an offset-addressed write, so the previously unreachable tail
+(bytes 256-293 of `PowerReadingCurrent[]`) is reachable on BL2 fw07+. Older
+BL2 firmware keeps the byte-offset limitation; see `advisories.py`'s
+`MITIGATIONS["cal-offset-8bit"]`.
+
+### New: `factory_cal_unlock()` (BL2 fw07+ only)
+
+BL2's factory calibration slot is now flash write-protected against a
+firmware update's mass erase. `factory_cal_unlock()` sends the fixed
+passphrase to temporarily lift that protection before a factory
+calibration write; the device resets immediately on a match. See its
+docstring in `config_io.py` for the full unlock/write/reconnect sequence.
+This command is a no-op (unknown opcode) on ORIGINAL and on older BL2
+firmware.
 
 ## Migrating to v0.7.0
 

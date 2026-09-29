@@ -19,6 +19,7 @@ from benchlab_pycore.core import (
     write_calibration,
     load_calibration,
     store_calibration,
+    factory_cal_unlock,
     send_action,
     # config structures
     FanMode,
@@ -58,7 +59,7 @@ def test_config_imports():
         read_fan_profile, write_fan_profile,
         read_rgb_profile, write_rgb_profile,
         read_calibration, write_calibration_chunk, write_calibration,
-        load_calibration, store_calibration,
+        load_calibration, store_calibration, factory_cal_unlock,
         send_action,
     ):
         assert callable(fn)
@@ -568,6 +569,16 @@ def test_store_calibration_factory_slot():
 def test_store_calibration_invalid_slot():
     with pytest.raises(ValueError, match="cal_id"):
         store_calibration(Mock(), cal_id=CAL_NUM)
+
+
+def test_factory_cal_unlock_sends_passphrase():
+    """factory_cal_unlock() sends the opcode followed by the fixed passphrase."""
+    mock_ser = Mock()
+    mock_ser.write.return_value = 9
+    result = factory_cal_unlock(mock_ser)
+    assert result is True
+    sent = mock_ser.write.call_args[0][0]
+    assert sent == bytes([BENCHLAB_CMD.UART_CMD_FACTORY_CAL_UNLOCK]) + b"benchlab"
 
 
 # -----------------------

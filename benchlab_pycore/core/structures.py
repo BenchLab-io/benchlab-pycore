@@ -22,7 +22,7 @@ FAN_NUM = 9
 # ORIGINAL Variant Constants
 # =============================================================================
 BENCHLAB_ORIGINAL_PRODUCT_ID       = 0x10
-BENCHLAB_ORIGINAL_FIRMWARE_VERSION = 0x05   # FIRMWARE_VERSION in benchlab.h
+BENCHLAB_ORIGINAL_FIRMWARE_VERSION = 0x06   # FIRMWARE_VERSION in benchlab.h
 
 SENSOR_VIN_NUM_ORIGINAL   = 13   # SENSOR_VIN_NUM
 SENSOR_POWER_NUM_ORIGINAL = 11   # SENSOR_POWER_NUM
@@ -39,7 +39,7 @@ SENSOR_TS_NAMES_ORIGINAL = ["TS_1", "TS_2", "TS_3", "TS_4"]
 # BL2 Variant Constants
 # =============================================================================
 BENCHLAB_BL2_PRODUCT_ID       = 0x11
-BENCHLAB_BL2_FIRMWARE_VERSION = 0x06   # FIRMWARE_VERSION in benchlab.h
+BENCHLAB_BL2_FIRMWARE_VERSION = 0x07   # FIRMWARE_VERSION in benchlab.h
 
 SENSOR_VIN_NUM_BL2   = 13
 SENSOR_POWER_NUM_BL2 = 23
@@ -230,6 +230,7 @@ class BENCHLAB_CMD(IntEnum):
     UART_CMD_STORE_CONFIG        = 18   # fw05 (ORIGINAL)/fw06 (BL2)
     UART_CMD_READ_DEFAULT_CONFIG = 19   # fw05 (ORIGINAL)/fw06 (BL2)
     UART_CMD_STATUS              = 20   # fw05 (ORIGINAL)/fw06 (BL2)
+    UART_CMD_FACTORY_CAL_UNLOCK  = 22   # BL2 only; fw07. Unknown opcode on ORIGINAL.
     UART_CMD_RESET               = 0xF0
     UART_CMD_BOOTLOADER          = 0xF1
     UART_CMD_NOP                 = 0xFF

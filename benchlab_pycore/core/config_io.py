@@ -24,6 +24,7 @@ exposed by the BENCHLAB firmware (UART_CMD_* cases in usbd_cdc_if.c):
     UART_CMD_STORE_CONFIG    | store_config()
     UART_CMD_READ_DEFAULT_CONFIG| read_default_config()
     UART_CMD_STATUS          | read_status()
+    UART_CMD_FACTORY_CAL_UNLOCK| factory_cal_unlock() (BENCHLAB 2 only)
     UART_CMD_RESET           | reset()
     UART_CMD_BOOTLOADER      | enter_bootloader()
 
@@ -686,6 +687,45 @@ def store_calibration(ser: serial.Serial, cal_id, product_id: Optional[int] = No
     ok = _write(ser, payload)
     if ok:
         logger.info("store_calibration: stored to slot %d", cal_id)
+    return ok
+
+
+_FACTORY_CAL_UNLOCK_PASSPHRASE = b"benchlab"
+
+
+def factory_cal_unlock(ser: serial.Serial) -> bool:
+    """Temporarily lift write-protection on BL2's factory calibration slot.
+
+    Mirrors ``UART_CMD_FACTORY_CAL_UNLOCK`` (BL2 fw07+ only; unknown opcode
+    on ORIGINAL and on older BL2 firmware).
+
+    BL2's factory calibration slot (``CAL_FACTORY``, ``STORE_CALIBRATION``
+    slot 1) is flash write-protected so a firmware update's mass erase can't
+    wipe it. On a passphrase match the device lifts protection and **resets
+    immediately** -- the USB CDC port drops and re-enumerates, so callers
+    must reconnect before sending ``STORE_CALIBRATION``. This is a full
+    factory-calibration sequence, not just this one call:
+
+        1. ``WRITE_CALIBRATION`` -- load the new values into RAM.
+        2. ``factory_cal_unlock()`` -- device resets.
+        3. Reconnect, re-send ``WRITE_CALIBRATION`` (RAM did not survive the
+           reset), then ``STORE_CALIBRATION`` slot 1 -- device resets again
+           and re-protects the slot.
+        4. Reconnect and verify with ``LOAD_CALIBRATION`` + ``READ_CALIBRATION``.
+
+    The passphrase guards against accidental writes, not deliberate
+    tampering -- it is not a security boundary.
+
+    Args:
+        ser: Open serial connection to the device.
+
+    Returns:
+        True if bytes were sent (no ACK from firmware).
+    """
+    payload = bytes([BENCHLAB_CMD.UART_CMD_FACTORY_CAL_UNLOCK]) + _FACTORY_CAL_UNLOCK_PASSPHRASE
+    ok = _write(ser, payload)
+    if ok:
+        logger.info("factory_cal_unlock: sent unlock passphrase")
     return ok
 
 
