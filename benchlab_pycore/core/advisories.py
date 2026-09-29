@@ -48,8 +48,10 @@ MITIGATIONS: Dict[str, str] = {
     ),
     "cal-offset-8bit": (
         "config_io.write_calibration_chunk() rejects offset > 255 with a "
-        "ValueError rather than silently truncating to a byte. The "
-        "unreachable BL2 tail (bytes 256-293) cannot be fixed from the host."
+        "ValueError rather than silently truncating to a byte. On BL2 "
+        "firmware below fw07, the tail (bytes 256-293) is unreachable and "
+        "cannot be fixed from the host; BL2 fw07+ replaces the whole "
+        "struct in one WRITE_CALIBRATION call, making the tail reachable."
     ),
     "tchip-whole-degrees": (
         "utils.format_chip_temp() scales by firmware version via "

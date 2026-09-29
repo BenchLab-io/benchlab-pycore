@@ -19,6 +19,7 @@ from benchlab_pycore.core import (
     write_calibration,
     load_calibration,
     store_calibration,
+    factory_cal_unlock,
     send_action,
     # config structures
     FanMode,
@@ -41,6 +42,7 @@ from benchlab_pycore.core import (
     FAN_CURVE_POINTS,
     # shared
     BENCHLAB_CMD,
+    BENCHLAB_BL2_PRODUCT_ID,
     FAN_NUM,
 )
 from ctypes import Structure
@@ -58,7 +60,7 @@ def test_config_imports():
         read_fan_profile, write_fan_profile,
         read_rgb_profile, write_rgb_profile,
         read_calibration, write_calibration_chunk, write_calibration,
-        load_calibration, store_calibration,
+        load_calibration, store_calibration, factory_cal_unlock,
         send_action,
     ):
         assert callable(fn)
@@ -470,7 +472,7 @@ def test_write_calibration_chunk_offset_too_large():
 
 
 def test_write_calibration_full_sends_chunks():
-    """write_calibration() splits large struct into multiple CDC packets."""
+    """write_calibration() splits large struct into multiple CDC packets on old firmware."""
     mock_ser = Mock()
     chunk_size = 10
     # Each write's return length must match the actual packet sent (the
@@ -479,7 +481,7 @@ def test_write_calibration_full_sends_chunks():
     mock_ser.write.side_effect = lambda data: len(data)
 
     cal = CalibrationStruct()
-    result = write_calibration(mock_ser, cal, chunk_size=chunk_size)
+    result = write_calibration(mock_ser, cal, chunk_size=chunk_size, fw_version=5)
 
     assert result is True
     call_count = mock_ser.write.call_count
@@ -495,25 +497,74 @@ def test_write_calibration_chunk_failure_aborts():
     mock_ser.write.side_effect = [chunk_size + 2, 0]
 
     cal = CalibrationStruct()
-    result = write_calibration(mock_ser, cal, chunk_size=chunk_size)
+    result = write_calibration(mock_ser, cal, chunk_size=chunk_size, fw_version=5)
 
     assert result is False
     assert mock_ser.write.call_count == 2
 
 
 def test_write_calibration_chunk_offsets_are_sequential():
-    """write_calibration() passes correct byte offsets to each chunk."""
+    """write_calibration() passes correct byte offsets to each chunk on old firmware."""
     mock_ser = Mock()
     chunk_size = 10
     mock_ser.write.side_effect = lambda data: len(data)  # always "succeeds"
 
     cal = CalibrationStruct()
-    result = write_calibration(mock_ser, cal, chunk_size=chunk_size)
+    result = write_calibration(mock_ser, cal, chunk_size=chunk_size, fw_version=5)
 
     assert result is True
     offsets = [c[0][0][1] for c in mock_ser.write.call_args_list]  # byte at index 1
     for i, offset in enumerate(offsets):
         assert offset == i * chunk_size
+
+
+def test_write_calibration_whole_struct_on_new_firmware():
+    """write_calibration() sends one whole-struct write on ORIGINAL fw06+."""
+    mock_ser = Mock()
+    mock_ser.write.side_effect = lambda data: len(data)
+
+    cal = CalibrationStruct()
+    result = write_calibration(mock_ser, cal, fw_version=6)
+
+    assert result is True
+    assert mock_ser.write.call_count == 1
+    sent = mock_ser.write.call_args[0][0]
+    assert sent[0] == BENCHLAB_CMD.UART_CMD_WRITE_CALIBRATION
+    assert sent[1:] == bytes(cal)
+    assert len(sent) == 1 + sizeof(CalibrationStruct)
+
+
+def test_write_calibration_whole_struct_on_new_bl2_firmware():
+    """write_calibration() sends one whole-struct write on BL2 fw07+."""
+    mock_ser = Mock()
+    mock_ser.write.side_effect = lambda data: len(data)
+
+    cal = CalibrationStructBL2()
+    result = write_calibration(
+        mock_ser, cal, product_id=BENCHLAB_BL2_PRODUCT_ID, fw_version=7,
+    )
+
+    assert result is True
+    assert mock_ser.write.call_count == 1
+    sent = mock_ser.write.call_args[0][0]
+    assert sent[0] == BENCHLAB_CMD.UART_CMD_WRITE_CALIBRATION
+    assert sent[1:] == bytes(cal)
+    assert len(sent) == 1 + sizeof(CalibrationStructBL2)
+
+
+def test_write_calibration_bl2_still_chunks_on_fw06():
+    """BL2 fw06 (pre-fix) still uses the legacy offset-addressed format."""
+    mock_ser = Mock()
+    mock_ser.write.side_effect = lambda data: len(data)
+
+    cal = CalibrationStructBL2()
+    result = write_calibration(
+        mock_ser, cal, chunk_size=62,
+        product_id=BENCHLAB_BL2_PRODUCT_ID, fw_version=6,
+    )
+
+    assert result is True
+    assert mock_ser.write.call_count > 1
 
 
 # -----------------------
@@ -568,6 +619,16 @@ def test_store_calibration_factory_slot():
 def test_store_calibration_invalid_slot():
     with pytest.raises(ValueError, match="cal_id"):
         store_calibration(Mock(), cal_id=CAL_NUM)
+
+
+def test_factory_cal_unlock_sends_passphrase():
+    """factory_cal_unlock() sends the opcode followed by the fixed passphrase."""
+    mock_ser = Mock()
+    mock_ser.write.return_value = 9
+    result = factory_cal_unlock(mock_ser)
+    assert result is True
+    sent = mock_ser.write.call_args[0][0]
+    assert sent == bytes([BENCHLAB_CMD.UART_CMD_FACTORY_CAL_UNLOCK]) + b"benchlab"
 
 
 # -----------------------

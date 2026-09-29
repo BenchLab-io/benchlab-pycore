@@ -1,8 +1,51 @@
-# Migration Guide to benchlab-pycore v0.7.0
+# Migration Guide to benchlab-pycore v0.8.0
 
 This guide covers breaking changes and new features introduced in each version.
 
 ---
+
+## Migrating to v0.8.0
+
+### Firmware version bump (action required if you pin firmware)
+
+Current firmware moves to ORIGINAL fw06 (`benchlab1/v0.6.0`) and BL2 fw07
+(`benchlab2/v0.7.0`). `BENCHLAB_ORIGINAL_FIRMWARE_VERSION` is now `6`
+(previously `5`); `BENCHLAB_BL2_FIRMWARE_VERSION` is now `7` (previously `6`).
+Both are wire-format-breaking bumps -- devices still running older firmware
+continue to work (older contracts remain vendored), but pycore now targets
+the new generation by default. Struct shapes are unchanged from fw05/fw06;
+this is a version-gate bump only.
+
+### `write_calibration()` wire format changed on ORIGINAL fw06+ / BL2 fw07+ (action required)
+
+`WRITE_CALIBRATION` became a whole-struct replace on these firmware
+versions -- `[cmd][full CalibrationStruct]`, no offset byte, no partial
+write. Older firmware used `[cmd][offset][chunk]`. Sending the old
+offset-addressed format to fw06+/fw07+ silently corrupts the write: the
+offset byte gets read back as the first byte of calibration data.
+
+`write_calibration()` now picks the correct wire format automatically
+based on `fw_version` (probed from the device if not passed explicitly,
+same as `read_sensors()`) -- **existing callers must pass `fw_version`**
+(or let it probe) to avoid corrupting calibration data on fw06+/fw07+
+devices. `write_calibration_chunk()` is unchanged and still speaks the
+legacy offset-addressed format only; do not call it directly against
+fw06+/fw07+ firmware.
+
+As a result, the `cal-offset-8bit` advisory (BL2's previously-unreachable
+calibration tail, bytes 256-293 of `PowerReadingCurrent[]`) is fixed on BL2
+fw07+ -- `write_calibration()` now reaches it. Older BL2 firmware keeps the
+byte-offset limitation; see `advisories.py`'s `MITIGATIONS["cal-offset-8bit"]`.
+
+### New: `factory_cal_unlock()` (BL2 fw07+ only)
+
+BL2's factory calibration slot is now flash write-protected against a
+firmware update's mass erase. `factory_cal_unlock()` sends the fixed
+passphrase to temporarily lift that protection before a factory
+calibration write; the device resets immediately on a match. See its
+docstring in `config_io.py` for the full unlock/write/reconnect sequence.
+This command is a no-op (unknown opcode) on ORIGINAL and on older BL2
+firmware.
 
 ## Migrating to v0.7.0
 

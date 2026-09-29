@@ -24,6 +24,7 @@ exposed by the BENCHLAB firmware (UART_CMD_* cases in usbd_cdc_if.c):
     UART_CMD_STORE_CONFIG    | store_config()
     UART_CMD_READ_DEFAULT_CONFIG| read_default_config()
     UART_CMD_STATUS          | read_status()
+    UART_CMD_FACTORY_CAL_UNLOCK| factory_cal_unlock() (BENCHLAB 2 only)
     UART_CMD_RESET           | reset()
     UART_CMD_BOOTLOADER      | enter_bootloader()
 
@@ -64,6 +65,8 @@ from .structures import (
     BENCHLAB_CMD,
     BENCHLAB_BL2_PRODUCT_ID,
     BENCHLAB_ORIGINAL_PRODUCT_ID,
+    BENCHLAB_ORIGINAL_WRITE_CALIBRATION_WHOLE_STRUCT_FROM,
+    BENCHLAB_BL2_WRITE_CALIBRATION_WHOLE_STRUCT_FROM,
     FAN_PROFILE_NUM,
     FAN_NUM,
     FAN_CURVE_POINTS,
@@ -83,7 +86,7 @@ from .structures import (
     DeviceConfigStructBL2,
     CommandStatus,
 )
-from .serial_io import read_uart
+from .serial_io import read_uart, _cached_identity
 
 # ---------------------------------------------------------------------------
 # Logger
@@ -501,12 +504,19 @@ def write_calibration_chunk(
 ) -> bool:
     """Write a raw byte slice into the device calibration struct.
 
-    Mirrors the ``UART_CMD_WRITE_CALIBRATION`` firmware case which accepts::
+    Mirrors the **legacy** ``UART_CMD_WRITE_CALIBRATION`` wire format::
 
         [cmd(1)] [offset(1)] [data…]
 
-    This low-level function is useful when you want to update only part of
-    the calibration table without a full round-trip.
+    .. warning::
+        This offset-addressed format only exists on ORIGINAL firmware below
+        fw06 and BL2 firmware below fw07. On ORIGINAL fw06+/BL2 fw07+,
+        ``WRITE_CALIBRATION`` became a whole-struct replace with **no**
+        offset byte -- sending this format there writes garbage: the offset
+        byte is read back as the first byte of calibration data. Use
+        ``write_calibration()`` instead, which picks the right wire format
+        automatically; call this directly only if you know the device is on
+        old firmware and specifically want a partial write.
 
     Args:
         ser:        Open serial connection to the device.
@@ -540,28 +550,64 @@ def write_calibration_chunk(
     return _write(ser, payload)
 
 
+def _write_calibration_whole(
+    ser: serial.Serial,
+    calibration: Union[CalibrationStruct, CalibrationStructBL2],
+) -> bool:
+    """Send ``WRITE_CALIBRATION`` as a single whole-struct replace.
+
+    Wire format on ORIGINAL fw06+ / BL2 fw07+::
+
+        [cmd(1)] [CalibrationStruct]
+
+    No offset byte -- the device now reassembles the multi-packet USB
+    transfer into one logical command before dispatch, so this can be a
+    single ``ser.write()`` regardless of USB CDC packet size.
+    """
+    payload = bytes([BENCHLAB_CMD.UART_CMD_WRITE_CALIBRATION]) + _struct_to_bytes(calibration)
+    ok = _write(ser, payload)
+    if ok:
+        logger.info("write_calibration: wrote %d bytes (whole-struct)", len(payload) - 1)
+    return ok
+
+
 def write_calibration(
     ser: serial.Serial,
     calibration: Union[CalibrationStruct, CalibrationStructBL2],
     chunk_size: int = _CDC_MAX_WRITE - 2,
     product_id: Optional[int] = None,
+    fw_version: Optional[int] = None,
 ) -> bool:
     """Write the full calibration table to the device.
 
-    The struct is split into chunks to stay within USB CDC packet limits.
-    Each chunk triggers one ``UART_CMD_WRITE_CALIBRATION`` transaction with
-    the appropriate byte offset.
+    ``WRITE_CALIBRATION``'s wire format is firmware-version-dependent:
+
+    - ORIGINAL fw06+ / BL2 fw07+: whole-struct replace, one
+      ``[cmd][CalibrationStruct]`` write, no offset byte.
+    - Older firmware: offset-addressed partial writes -- the struct is
+      split into chunks to stay within USB CDC packet limits, each sent as
+      its own ``UART_CMD_WRITE_CALIBRATION`` transaction via
+      ``write_calibration_chunk()``.
+
+    *fw_version* selects between them; if omitted, it is probed from the
+    device (see ``_cached_identity``) the same way ``read_sensors()`` does.
+    Sending the offset-addressed format to fw06+/fw07+ silently corrupts
+    the write -- the offset byte is read back as calibration data.
 
     Args:
         ser:         Open serial connection to the device.
         calibration: Populated :class:`CalibrationStruct` or
                      :class:`CalibrationStructBL2` to write.
-        chunk_size:  Max payload bytes per packet (default: 62).
+        chunk_size:  Max payload bytes per packet on old firmware
+                     (default: 62). Ignored on fw06+/fw07+.
         product_id:  Product ID forwarded to ``write_calibration_chunk`` for
-                     bounds checking.
+                     bounds checking, and used to resolve the whole-struct
+                     threshold if *fw_version* is not given.
+        fw_version:  FwVersion from ``read_device()``. If omitted, probed
+                     from the device.
 
     Returns:
-        True if all chunks were written successfully.
+        True if the write (whole-struct) or all chunks (legacy) succeeded.
 
     Example::
 
@@ -570,6 +616,17 @@ def write_calibration(
         >>> write_calibration(ser, cal)
         True
     """
+    if fw_version is None:
+        product_id, fw_version = _cached_identity(ser, product_id)
+
+    whole_struct_from = (
+        BENCHLAB_BL2_WRITE_CALIBRATION_WHOLE_STRUCT_FROM
+        if product_id == BENCHLAB_BL2_PRODUCT_ID
+        else BENCHLAB_ORIGINAL_WRITE_CALIBRATION_WHOLE_STRUCT_FROM
+    )
+    if fw_version is not None and fw_version >= whole_struct_from:
+        return _write_calibration_whole(ser, calibration)
+
     raw = _struct_to_bytes(calibration)
     offset = 0
     while offset < len(raw):
@@ -686,6 +743,45 @@ def store_calibration(ser: serial.Serial, cal_id, product_id: Optional[int] = No
     ok = _write(ser, payload)
     if ok:
         logger.info("store_calibration: stored to slot %d", cal_id)
+    return ok
+
+
+_FACTORY_CAL_UNLOCK_PASSPHRASE = b"benchlab"
+
+
+def factory_cal_unlock(ser: serial.Serial) -> bool:
+    """Temporarily lift write-protection on BL2's factory calibration slot.
+
+    Mirrors ``UART_CMD_FACTORY_CAL_UNLOCK`` (BL2 fw07+ only; unknown opcode
+    on ORIGINAL and on older BL2 firmware).
+
+    BL2's factory calibration slot (``CAL_FACTORY``, ``STORE_CALIBRATION``
+    slot 1) is flash write-protected so a firmware update's mass erase can't
+    wipe it. On a passphrase match the device lifts protection and **resets
+    immediately** -- the USB CDC port drops and re-enumerates, so callers
+    must reconnect before sending ``STORE_CALIBRATION``. This is a full
+    factory-calibration sequence, not just this one call:
+
+        1. ``WRITE_CALIBRATION`` -- load the new values into RAM.
+        2. ``factory_cal_unlock()`` -- device resets.
+        3. Reconnect, re-send ``WRITE_CALIBRATION`` (RAM did not survive the
+           reset), then ``STORE_CALIBRATION`` slot 1 -- device resets again
+           and re-protects the slot.
+        4. Reconnect and verify with ``LOAD_CALIBRATION`` + ``READ_CALIBRATION``.
+
+    The passphrase guards against accidental writes, not deliberate
+    tampering -- it is not a security boundary.
+
+    Args:
+        ser: Open serial connection to the device.
+
+    Returns:
+        True if bytes were sent (no ACK from firmware).
+    """
+    payload = bytes([BENCHLAB_CMD.UART_CMD_FACTORY_CAL_UNLOCK]) + _FACTORY_CAL_UNLOCK_PASSPHRASE
+    ok = _write(ser, payload)
+    if ok:
+        logger.info("factory_cal_unlock: sent unlock passphrase")
     return ok
 
 
