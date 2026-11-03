@@ -6,6 +6,14 @@ This guide covers breaking changes and new features introduced in each version.
 
 ## Migrating to v0.9.0
 
+### Python floor raised to 3.11 (action required on 3.9/3.10)
+
+`requires-python` is now `>=3.11` (previously `>=3.9`). Python 3.9 reached
+upstream end-of-life in October 2025; nothing in this library actually
+needed the older floor, so it is dropped rather than kept on CI life
+support. Callers still on Python 3.9 or 3.10 must upgrade their interpreter
+before taking this release.
+
 ### Firmware version bump (action required if you pin firmware)
 
 Current firmware moves to ORIGINAL fw07 (`benchlab1/v0.7.0`) and BL2 fw08

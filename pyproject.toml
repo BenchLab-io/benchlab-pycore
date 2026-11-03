@@ -4,10 +4,10 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "benchlab-pycore"
-version = "0.8.0"
+version = "0.9.0"
 description = "BENCHLAB PyCore - Python Interface for BENCHLAB"
 readme = "README.md"
-requires-python = ">=3.9"
+requires-python = ">=3.11"
 license = {text = "MIT"}
 authors = [
   {name = "Pieter Plaisier", email = "contact@benchlab.io"}
@@ -15,7 +15,7 @@ authors = [
 keywords = ["telemetry", "hardware", "benchlab", "sensors"]
 classifiers = [
   "Programming Language :: Python :: 3",
-  "Programming Language :: Python :: 3.9",
+  "Programming Language :: Python :: 3.11",
   "Programming Language :: Python :: 3.13",
   "License :: OSI Approved :: MIT License",
   "Operating System :: OS Independent"
