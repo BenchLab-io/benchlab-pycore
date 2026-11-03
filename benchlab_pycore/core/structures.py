@@ -151,6 +151,21 @@ class FaultActionBL2(IntEnum):
 # Shared Sensor Structures
 # =============================================================================
 
+class VendorDataStructLegacy(Structure):
+    """Vendor identification, pre-v0.9.0 (3 bytes, no PatchVersion).
+
+    Firmware predating the release that added PatchVersion sends this
+    shorter layout on READ_VENDOR_DATA. read_device() falls back to this
+    class when the 4-byte read comes up short. See VendorDataStruct for the
+    current layout.
+    """
+    _fields_ = [
+        ('VendorId',  c_uint8),
+        ('ProductId', c_uint8),
+        ('FwVersion', c_uint8),
+    ]
+
+
 class VendorDataStruct(Structure):
     """Vendor identification — VendorDataStruct in benchlab.h.
 
@@ -158,11 +173,11 @@ class VendorDataStruct(Structure):
     0x00-0xFE is a tagged release's patch number; 0xFF means a non-release
     build and carries no further meaning. It is purely informational -- it
     never affects how any struct or command is parsed, unlike FwVersion.
+
+    PatchVersion was added in v0.9.0; firmware predating it sends the
+    shorter VendorDataStructLegacy layout instead.
     """
-    _fields_ = [
-        ('VendorId',     c_uint8),
-        ('ProductId',    c_uint8),
-        ('FwVersion',    c_uint8),
+    _fields_ = VendorDataStructLegacy._fields_ + [
         ('PatchVersion', c_uint8),
     ]
 
@@ -270,6 +285,12 @@ BENCHLAB_BL2_SENSOR_FAULT_FIELDS_FROM = 5
 # fw07 is the first ORIGINAL firmware to send FaultStatus/FaultLog on
 # READ_SENSORS, when the OTP/OCP fault framework was ported from BL2 (#74).
 BENCHLAB_ORIGINAL_SENSOR_FAULT_FIELDS_FROM = 7
+
+# First firmware of each variant to send PatchVersion on READ_VENDOR_DATA
+# (v0.9.0). Below these, VendorDataStruct's 4-byte read comes up short
+# against the 3-byte VendorDataStructLegacy layout (#22).
+BENCHLAB_ORIGINAL_VENDOR_PATCH_VERSION_FROM = 7
+BENCHLAB_BL2_VENDOR_PATCH_VERSION_FROM = 8
 
 # WRITE_CALIBRATION became a whole-struct replace ([cmd][full struct], no
 # offset byte, no partial write) from these firmware versions on --
@@ -722,6 +743,18 @@ def _verify_struct_sizes():
         # READ_SENSORS layout that fw03/fw04 send.
         (BENCHLAB_BL2_PRODUCT_ID, BENCHLAB_BL2_SENSOR_FAULT_FIELDS_FROM - 1, {
             "SensorStruct": SensorStructBL2Legacy,
+        }),
+        # The last released pre-PatchVersion ORIGINAL firmware -- checks
+        # VendorDataStructLegacy against the shorter, still-supported
+        # READ_VENDOR_DATA layout that predates v0.9.0.
+        (BENCHLAB_ORIGINAL_PRODUCT_ID, BENCHLAB_ORIGINAL_VENDOR_PATCH_VERSION_FROM - 1, {
+            "VendorDataStruct": VendorDataStructLegacy,
+        }),
+        # The last released pre-PatchVersion BL2 firmware -- checks
+        # VendorDataStructLegacy against the shorter, still-supported
+        # READ_VENDOR_DATA layout that predates v0.9.0.
+        (BENCHLAB_BL2_PRODUCT_ID, BENCHLAB_BL2_VENDOR_PATCH_VERSION_FROM - 1, {
+            "VendorDataStruct": VendorDataStructLegacy,
         }),
     ]
 
