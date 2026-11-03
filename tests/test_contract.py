@@ -44,13 +44,14 @@ _BY_VARIANT = {
         _COMMON,
         SensorStruct=st.SensorStructOriginal,
         CalibrationStruct=st.CalibrationStruct,
+        FaultConfigStruct=st.FaultConfigStruct,
         DeviceConfigStruct=st.DeviceConfigStruct,
     ),
     "benchlab2": dict(
         _COMMON,
         SensorStruct=st.SensorStructBL2,
         CalibrationStruct=st.CalibrationStructBL2,
-        FaultConfigStruct=st.FaultConfigStruct,
+        FaultConfigStruct=st.FaultConfigStructBL2,
         DeviceConfigStruct=st.DeviceConfigStructBL2,
     ),
 }
@@ -253,15 +254,18 @@ def test_no_commands_beyond_the_latest_contract():
 # Enums
 # =============================================================================
 
-def _assert_enum_matches(contract, contract_enum, py_enum, prefix, allow_missing=()):
+def _assert_enum_matches(contract, contract_enum, py_enum, prefix, allow_missing=(), rename=None):
     """Compare a pycore IntEnum against a contract enum.
 
     Contract members are prefixed (RGB_MODE_RAINBOW vs pycore's RAINBOW), so the
     prefix is stripped before comparing. ``allow_missing`` names contract members
-    pycore deliberately does not model.
+    pycore deliberately does not model. ``rename`` maps a stripped contract name
+    to the pycore member name actually used, for members a Python identifier
+    cannot spell as-is (e.g. a leading digit).
     """
+    rename = rename or {}
     expected = {
-        name[len(prefix):]: value
+        rename.get(name[len(prefix):], name[len(prefix):]): value
         for name, value in contract.enum(contract_enum).items()
         if name[len(prefix):] not in allow_missing
     }
@@ -288,6 +292,38 @@ def test_rgb_mode_enum(contract):
     _assert_enum_matches(
         contract, "RGB_MODE", st.RGBMode, "RGB_MODE_",
         allow_missing={"FAULT", "NONE"},
+    )
+
+
+def test_fault_enum_original():
+    """ORIGINAL gained its own (trimmed) FAULT enum in fw07 (#74 port from BL2)."""
+    _assert_enum_matches(
+        contract_for(st.BENCHLAB_ORIGINAL_PRODUCT_ID, 7), "FAULT", st.Fault, "FAULT_",
+        allow_missing={"NUM"},
+    )
+
+
+def test_fault_action_enum_original():
+    _assert_enum_matches(
+        contract_for(st.BENCHLAB_ORIGINAL_PRODUCT_ID, 7), "FAULT_ACTION", st.FaultAction,
+        "FAULT_ACTION_", allow_missing={"NUM"},
+    )
+
+
+def test_fault_enum_bl2():
+    _assert_enum_matches(
+        contract_for(st.BENCHLAB_BL2_PRODUCT_ID, st.BENCHLAB_BL2_FIRMWARE_VERSION),
+        "FAULT", st.FaultBL2, "FAULT_", allow_missing={"NUM"},
+    )
+
+
+def test_fault_action_enum_bl2():
+    # Contract names the fifth action "5VSB_POWER"; no Python identifier can
+    # start with a digit, so pycore spells it FIVE_VSB_POWER.
+    _assert_enum_matches(
+        contract_for(st.BENCHLAB_BL2_PRODUCT_ID, st.BENCHLAB_BL2_FIRMWARE_VERSION),
+        "FAULT_ACTION", st.FaultActionBL2, "FAULT_ACTION_", allow_missing={"NUM"},
+        rename={"5VSB_POWER": "FIVE_VSB_POWER"},
     )
 
 
@@ -399,8 +435,8 @@ def test_read_sensors_tags_identity_so_translation_is_correct():
     real_read_uart = sio.read_uart
 
     def fake_read_uart(ser, cmd, size):
-        if size == 3:                        # VendorDataStruct: BL2, fw04
-            return bytes([0xEE, 0x11, 4])
+        if size == 4:                        # VendorDataStruct: BL2, fw04
+            return bytes([0xEE, 0x11, 4, 0xFF])
         return bytes(sensors)
 
     sio.read_uart = fake_read_uart
@@ -428,9 +464,9 @@ def test_identity_probe_is_cached_per_connection():
     real_read_uart = sio.read_uart
 
     def fake_read_uart(ser, cmd, size):
-        if size == 3:
+        if size == 4:
             probes["vendor"] += 1
-            return bytes([0xEE, 0x11, 4])
+            return bytes([0xEE, 0x11, 4, 0xFF])
         return bytes(sensors)
 
     sio.read_uart = fake_read_uart

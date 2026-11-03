@@ -32,6 +32,7 @@ from benchlab_pycore.core import (
     SENSOR_POWER_NAMES_ORIGINAL,
     SENSOR_TS_NAMES_ORIGINAL,
     BENCHLAB_ORIGINAL_PRODUCT_ID,
+    BENCHLAB_ORIGINAL_FIRMWARE_VERSION,
     # BL2 variant constants
     SENSOR_VIN_NUM_BL2,
     SENSOR_POWER_NUM_BL2,
@@ -136,15 +137,16 @@ def test_find_benchlab_devices_serial_failure(mock_serial, mock_get_ports):
 @patch("benchlab_pycore.core.serial_io.read_uart")
 def test_read_device_success(mock_read_uart):
     """Test read_device with successful read."""
-    mock_read_uart.return_value = bytes([0xEE, 0x10, 0x01])
-    
+    mock_read_uart.return_value = bytes([0xEE, 0x10, 0x01, 0xFF])
+
     mock_ser = Mock()
     result = read_device(mock_ser)
-    
+
     assert result == {
         "VendorId": 0xEE,
         "ProductId": 0x10,
         "FwVersion": 0x01,
+        "PatchVersion": 0xFF,
     }
 
 
@@ -161,12 +163,24 @@ def test_read_device_uart_failure(mock_read_uart):
 
 @patch("benchlab_pycore.core.serial_io.read_uart")
 def test_read_sensors_original_success(mock_read_uart):
-    """Test read_sensors with ORIGINAL product_id returns SensorStructOriginal."""
+    """Test read_sensors with ORIGINAL product_id/fw_version returns SensorStructOriginal.
+
+    fw_version must be passed explicitly here: on ORIGINAL, read_sensors()
+    picks between SensorStructOriginal (fw07+, with FaultStatus/FaultLog) and
+    the shorter SensorStructOriginalLegacy (fw06 and below) based on it.
+    Leaving it out would fall through to probing the device via
+    read_device(), which read_uart is also mocked for here and would return
+    garbage identity.
+    """
     mock_read_uart.return_value = bytes([0] * sizeof(SensorStructOriginal))
-    
+
     mock_ser = Mock()
-    result = read_sensors(mock_ser, product_id=BENCHLAB_ORIGINAL_PRODUCT_ID)
-    
+    result = read_sensors(
+        mock_ser,
+        product_id=BENCHLAB_ORIGINAL_PRODUCT_ID,
+        fw_version=BENCHLAB_ORIGINAL_FIRMWARE_VERSION,
+    )
+
     assert isinstance(result, SensorStructOriginal)
 
 
