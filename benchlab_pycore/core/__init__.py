@@ -48,6 +48,7 @@ from .contract import (
 from .structures import (
     # Shared structures
     VendorDataStruct,
+    VendorDataStructLegacy,
     PowerSensor,
     FanSensor,
     BENCHLAB_CMD,
@@ -153,6 +154,7 @@ __all__ = [
     "enter_bootloader",
     # Shared structures
     "VendorDataStruct",
+    "VendorDataStructLegacy",
     "PowerSensor",
     "FanSensor",
     "BENCHLAB_CMD",

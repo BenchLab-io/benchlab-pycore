@@ -154,11 +154,45 @@ def test_read_device_success(mock_read_uart):
 def test_read_device_uart_failure(mock_read_uart):
     """Test read_device with UART read failure."""
     mock_read_uart.return_value = None
-    
+
     mock_ser = Mock()
     result = read_device(mock_ser)
-    
+
     assert result is None
+
+
+@patch("benchlab_pycore.core.serial_io.read_uart")
+def test_read_device_legacy_fallback(mock_read_uart):
+    """Test read_device falls back to the 3-byte legacy layout (#22).
+
+    Firmware predating v0.9.0 doesn't send PatchVersion, so the first
+    (4-byte) read comes up short. read_device() should retry with
+    VendorDataStructLegacy rather than returning None outright.
+    """
+    mock_read_uart.side_effect = [None, bytes([0xEE, 0x10, 0x06])]
+
+    mock_ser = Mock()
+    result = read_device(mock_ser)
+
+    assert result == {
+        "VendorId": 0xEE,
+        "ProductId": 0x10,
+        "FwVersion": 0x06,
+        "PatchVersion": None,
+    }
+    assert mock_read_uart.call_count == 2
+
+
+@patch("benchlab_pycore.core.serial_io.read_uart")
+def test_read_device_legacy_fallback_also_fails(mock_read_uart):
+    """Test read_device returns None when both the 4-byte and 3-byte reads fail."""
+    mock_read_uart.side_effect = [None, None]
+
+    mock_ser = Mock()
+    result = read_device(mock_ser)
+
+    assert result is None
+    assert mock_read_uart.call_count == 2
 
 
 @patch("benchlab_pycore.core.serial_io.read_uart")

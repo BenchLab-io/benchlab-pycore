@@ -1,6 +1,22 @@
-# Migration Guide to benchlab-pycore v0.9.0
+# Migration Guide to benchlab-pycore v0.9.1
 
 This guide covers breaking changes and new features introduced in each version.
+
+---
+
+## Migrating to v0.9.1
+
+v0.9.1 is a non-breaking release. No code changes are required to upgrade.
+
+### Fix: `read_device()` had no fallback for pre-v0.9.0 firmware (#22)
+
+`read_device()` always read a fixed 4-byte `VendorDataStruct` (the size
+added by v0.9.0's `PatchVersion` field). Against firmware still sending the
+3-byte pre-v0.9.0 layout, the read came up short and `read_device()`
+returned `None` entirely -- losing `VendorId`/`ProductId`/`FwVersion` too,
+not just `PatchVersion`. It now falls back to the legacy 3-byte layout when
+the 4-byte read fails; `PatchVersion` is `None` in the returned dict in that
+case.
 
 ---
 

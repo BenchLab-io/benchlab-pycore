@@ -35,6 +35,7 @@ from typing import List, Dict, Optional, Union
 
 from benchlab_pycore.core.structures import (
     VendorDataStruct,
+    VendorDataStructLegacy,
     SensorStructOriginal,
     SensorStructOriginalLegacy,
     SensorStructBL2,
@@ -244,6 +245,8 @@ def read_device(ser: serial.Serial) -> Optional[Dict[str, int]]:
     Returns:
         Optional[Dict[str, int]]: Dictionary with 'VendorId', 'ProductId', 'FwVersion',
                                  and 'PatchVersion' keys, or None if read failed.
+                                 'PatchVersion' is None on firmware predating
+                                 v0.9.0, which doesn't send it.
 
     Example:
         >>> ser = serial.Serial('COM3', 115200)
@@ -257,15 +260,33 @@ def read_device(ser: serial.Serial) -> Optional[Dict[str, int]]:
             BENCHLAB_CMD.UART_CMD_READ_VENDOR_DATA,
             sizeof(VendorDataStruct)
         )
+        if buffer is not None:
+            vendor_struct = VendorDataStruct.from_buffer_copy(buffer)
+            return {
+                "VendorId": vendor_struct.VendorId,
+                "ProductId": vendor_struct.ProductId,
+                "FwVersion": vendor_struct.FwVersion,
+                "PatchVersion": vendor_struct.PatchVersion,
+            }
+
+        # Firmware predating v0.9.0 sends the shorter, PatchVersion-less
+        # layout -- the read above came up short against it. Re-issue the
+        # command and read the legacy size instead of giving up on
+        # identification entirely (#22).
+        buffer = read_uart(
+            ser,
+            BENCHLAB_CMD.UART_CMD_READ_VENDOR_DATA,
+            sizeof(VendorDataStructLegacy)
+        )
         if buffer is None:
             logger.warning("Failed to read vendor data from device")
             return None
-        vendor_struct = VendorDataStruct.from_buffer_copy(buffer)
+        vendor_struct = VendorDataStructLegacy.from_buffer_copy(buffer)
         return {
             "VendorId": vendor_struct.VendorId,
             "ProductId": vendor_struct.ProductId,
             "FwVersion": vendor_struct.FwVersion,
-            "PatchVersion": vendor_struct.PatchVersion,
+            "PatchVersion": None,
         }
     except (serial.SerialException, OSError, ValueError, TypeError) as e:
         logger.warning("Failed to read device: %s", e)
