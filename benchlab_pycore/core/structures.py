@@ -22,7 +22,7 @@ FAN_NUM = 9
 # ORIGINAL Variant Constants
 # =============================================================================
 BENCHLAB_ORIGINAL_PRODUCT_ID       = 0x10
-BENCHLAB_ORIGINAL_FIRMWARE_VERSION = 0x06   # FIRMWARE_VERSION in benchlab.h
+BENCHLAB_ORIGINAL_FIRMWARE_VERSION = 0x07   # FIRMWARE_VERSION in benchlab.h
 
 SENSOR_VIN_NUM_ORIGINAL   = 13   # SENSOR_VIN_NUM
 SENSOR_POWER_NUM_ORIGINAL = 11   # SENSOR_POWER_NUM
@@ -39,7 +39,7 @@ SENSOR_TS_NAMES_ORIGINAL = ["TS_1", "TS_2", "TS_3", "TS_4"]
 # BL2 Variant Constants
 # =============================================================================
 BENCHLAB_BL2_PRODUCT_ID       = 0x11
-BENCHLAB_BL2_FIRMWARE_VERSION = 0x07   # FIRMWARE_VERSION in benchlab.h
+BENCHLAB_BL2_FIRMWARE_VERSION = 0x08   # FIRMWARE_VERSION in benchlab.h
 
 SENSOR_VIN_NUM_BL2   = 13
 SENSOR_POWER_NUM_BL2 = 23
@@ -57,13 +57,50 @@ SENSOR_TS_NAMES_BL2 = [
     "TS_HPWR1_IN", "TS_HPWR1_OUT", "TS_HPWR2_IN", "TS_HPWR2_OUT",
 ]
 
-FAULT_NUM        = 34   # FAULT_NUM in benchlab.h (BL2 only)
-FAULT_ACTION_NUM = 6    # FAULT_ACTION_NUM in benchlab.h (BL2 only)
+FAULT_NUM_BL2        = 34   # FAULT_NUM in benchlab.h (BL2)
+FAULT_ACTION_NUM_BL2 = 6    # FAULT_ACTION_NUM in benchlab.h (BL2)
+
+# ORIGINAL gained the fault-protection framework in fw07, ported from BL2
+# (firmware #74). Its FAULT/FAULT_ACTION enums are trimmed subsets of BL2's:
+# no HPWR-thermistor OTP tier, no per-wire OCP/current-imbalance tier (those
+# need BL2's per-wire INA3221 sensing), no buzzer/5VSB fault action.
+FAULT_NUM        = 16   # FAULT_NUM in benchlab.h (ORIGINAL, fw07+)
+FAULT_ACTION_NUM = 4    # FAULT_ACTION_NUM in benchlab.h (ORIGINAL, fw07+)
 
 
 class Fault(IntEnum):
     """FAULT enum in benchlab.h — indexes FaultConfigStruct.MaxLimit/MinDuration
-    and the SensorStructBL2.FaultStatus/FaultLog bitmasks. BL2 only."""
+    and SensorStructOriginal.FaultStatus/FaultLog. ORIGINAL, fw07+."""
+    OTP_TCHIP   = 0
+    OTP_TS1     = 1
+    OTP_TS2     = 2
+    OTP_TS3     = 3
+    OTP_TS4     = 4
+    OCP_CPU1    = 5
+    OCP_CPU2    = 6
+    OCP_ATX3V   = 7
+    OCP_ATX5V   = 8
+    OCP_ATX5VSB = 9
+    OCP_ATX12V  = 10
+    OCP_GPU1    = 11
+    OCP_GPU2    = 12
+    OCP_GPU3    = 13
+    OCP_HPWR1   = 14
+    OCP_HPWR2   = 15
+
+
+class FaultAction(IntEnum):
+    """FAULT_ACTION enum in benchlab.h — indexes FaultConfigStruct.ActionEnable/
+    ActionWaitTime. ORIGINAL, fw07+."""
+    LED        = 0
+    SOFT_POWER = 1
+    HARD_POWER = 2
+    RESET      = 3
+
+
+class FaultBL2(IntEnum):
+    """FAULT enum in benchlab.h — indexes FaultConfigStructBL2.MaxLimit/
+    MinDuration and SensorStructBL2.FaultStatus/FaultLog. BL2 only."""
     OTP_TCHIP                    = 0
     OTP_TS1                      = 1
     OTP_TS2                      = 2
@@ -100,8 +137,8 @@ class Fault(IntEnum):
     CURRENT_IMBALANCE_HPWR2        = 33
 
 
-class FaultAction(IntEnum):
-    """FAULT_ACTION enum in benchlab.h — indexes FaultConfigStruct.ActionEnable/
+class FaultActionBL2(IntEnum):
+    """FAULT_ACTION enum in benchlab.h — indexes FaultConfigStructBL2.ActionEnable/
     ActionWaitTime. BL2 only."""
     LED         = 0
     BUZZER      = 1
@@ -115,11 +152,18 @@ class FaultAction(IntEnum):
 # =============================================================================
 
 class VendorDataStruct(Structure):
-    """Vendor identification — VendorDataStruct in benchlab.h."""
+    """Vendor identification — VendorDataStruct in benchlab.h.
+
+    PatchVersion is the Z in the release tag vX.Y.Z, baked in at build time.
+    0x00-0xFE is a tagged release's patch number; 0xFF means a non-release
+    build and carries no further meaning. It is purely informational -- it
+    never affects how any struct or command is parsed, unlike FwVersion.
+    """
     _fields_ = [
-        ('VendorId',  c_uint8),
-        ('ProductId', c_uint8),
-        ('FwVersion', c_uint8),
+        ('VendorId',     c_uint8),
+        ('ProductId',    c_uint8),
+        ('FwVersion',    c_uint8),
+        ('PatchVersion', c_uint8),
     ]
 
 
@@ -141,8 +185,15 @@ class FanSensor(Structure):
     ]
 
 
-class SensorStructOriginal(Structure):
-    """Sensor data for ORIGINAL BENCHLAB — SensorStruct in benchlab.h."""
+class SensorStructOriginalLegacy(Structure):
+    """Sensor data for ORIGINAL BENCHLAB, pre-fw07 (216 bytes, no fault fields).
+
+    ORIGINAL fw06 and below send this shorter layout -- READ_SENSORS did not
+    grow FaultStatus/FaultLog until fw07, when the OTP/OCP fault framework
+    was ported from BL2 (#74). read_sensors() selects this class for those
+    older firmware versions; a device still running one would otherwise get
+    a short read against the newer 232-byte SensorStructOriginal.
+    """
     _fields_ = [
         ('Vin',             c_int16  * SENSOR_VIN_NUM_ORIGINAL),
         ('Vdd',             c_uint16),
@@ -157,6 +208,20 @@ class SensorStructOriginal(Structure):
         ('FanExtDuty',      c_uint8),
         ('PowerReadings',   PowerSensor * SENSOR_POWER_NUM_ORIGINAL),
         ('Fans',            FanSensor   * FAN_NUM),
+    ]
+
+
+class SensorStructOriginal(Structure):
+    """Sensor data for ORIGINAL BENCHLAB, fw07+ — SensorStruct in benchlab.h.
+
+    FaultStatus/FaultLog were added in fw07 -- bitmasks over the Fault enum,
+    one bit per FAULT_NUM member. FaultStatus is the live fault state;
+    FaultLog is the latched (sticky) history. See SensorStructOriginalLegacy
+    for the pre-fw07 (216-byte) layout.
+    """
+    _fields_ = SensorStructOriginalLegacy._fields_ + [
+        ('FaultStatus', c_uint64),
+        ('FaultLog',    c_uint64),
     ]
 
 
@@ -188,10 +253,10 @@ class SensorStructBL2Legacy(Structure):
 class SensorStructBL2(Structure):
     """Sensor data for BENCHLAB-2, fw05+ (extended variant).
 
-    FaultStatus/FaultLog were added in fw05 — bitmasks over the Fault enum,
-    one bit per FAULT_NUM member. FaultStatus is the live fault state;
-    FaultLog is the latched (sticky) history. See SensorStructBL2Legacy for
-    the pre-fw05 (368-byte) layout.
+    FaultStatus/FaultLog were added in fw05 — bitmasks over the FaultBL2
+    enum, one bit per FAULT_NUM_BL2 member. FaultStatus is the live fault
+    state; FaultLog is the latched (sticky) history. See SensorStructBL2Legacy
+    for the pre-fw05 (368-byte) layout.
     """
     _fields_ = SensorStructBL2Legacy._fields_ + [
         ('FaultStatus',     c_uint64),
@@ -201,6 +266,10 @@ class SensorStructBL2(Structure):
 
 # fw05 is the first BL2 firmware to send FaultStatus/FaultLog on READ_SENSORS.
 BENCHLAB_BL2_SENSOR_FAULT_FIELDS_FROM = 5
+
+# fw07 is the first ORIGINAL firmware to send FaultStatus/FaultLog on
+# READ_SENSORS, when the OTP/OCP fault framework was ported from BL2 (#74).
+BENCHLAB_ORIGINAL_SENSOR_FAULT_FIELDS_FROM = 7
 
 # WRITE_CALIBRATION became a whole-struct replace ([cmd][full struct], no
 # offset byte, no partial write) from these firmware versions on --
@@ -231,8 +300,8 @@ class BENCHLAB_CMD(IntEnum):
     UART_CMD_STORE_CALIBRATION= 12
     UART_CMD_READ_UID         = 13
     UART_CMD_READ_VENDOR_DATA = 14
-    UART_CMD_READ_FAULT          = 15   # BENCHLAB 2 only; fw05 (ORIGINAL)/fw06 (BL2)
-    UART_CMD_WRITE_FAULT         = 16   # BENCHLAB 2 only; fw05 (ORIGINAL)/fw06 (BL2)
+    UART_CMD_READ_FAULT          = 15   # opcode existed from fw05 (ORIGINAL)/fw06 (BL2) but
+    UART_CMD_WRITE_FAULT         = 16   # was BL2-only (unknown opcode on ORIGINAL) until fw07 (ORIGINAL)
     UART_CMD_LOAD_CONFIG         = 17   # fw05 (ORIGINAL)/fw06 (BL2)
     UART_CMD_STORE_CONFIG        = 18   # fw05 (ORIGINAL)/fw06 (BL2)
     UART_CMD_READ_DEFAULT_CONFIG = 19   # fw05 (ORIGINAL)/fw06 (BL2)
@@ -482,15 +551,20 @@ class CalibrationStruct(Structure):
 
 
 # =============================================================================
-# Fault Configuration — FaultConfigStruct in benchlab.h (BENCHLAB 2 only)
+# Fault Configuration — FaultConfigStruct in benchlab.h
+#
+# Available on both variants as of firmware #74. ORIGINAL's FAULT/FAULT_ACTION
+# enums (see above) are trimmed subsets of BL2's, so its struct is smaller
+# even though the shape is identical.
 # =============================================================================
 
 class FaultConfigStruct(Structure):
-    """Fault-protection configuration — FaultConfigStruct in benchlab.h.
+    """Fault-protection configuration for ORIGINAL BENCHLAB — FaultConfigStruct
+    in benchlab.h.
 
-    Payload of READ_FAULT (0x0F) / WRITE_FAULT (0x10). BENCHLAB 2 only; frozen
-    in fw06 (see benchlab2/v0.6.1). Total size: 128 bytes (8-byte aligned by
-    the uint64 array).
+    Payload of READ_FAULT (0x0F) / WRITE_FAULT (0x10). ORIGINAL, fw07+. Total
+    size: 72 bytes (8-byte aligned by the uint64 array). See
+    FaultConfigStructBL2 for BL2's larger (128-byte) equivalent.
 
     Attributes:
         ActionEnable:   One 64-bit bitmask per FaultAction, bit N set means
@@ -509,6 +583,31 @@ class FaultConfigStruct(Structure):
     ]
 
 
+class FaultConfigStructBL2(Structure):
+    """Fault-protection configuration for BENCHLAB-2 — FaultConfigStruct in
+    benchlab.h.
+
+    Payload of READ_FAULT (0x0F) / WRITE_FAULT (0x10). BL2 only; frozen in
+    fw06 (see benchlab2/v0.6.1). Total size: 128 bytes (8-byte aligned by the
+    uint64 array).
+
+    Attributes:
+        ActionEnable:   One 64-bit bitmask per FaultActionBL2, bit N set
+                         means that action fires on FaultBL2(N).
+        ActionWaitTime: Per-action wait time, in 1000 ms intervals.
+        MaxLimit:       Per-fault trip threshold, indexed by FaultBL2
+                         (0.1V/0.5A/1degC/10W units depending on fault type).
+        MinDuration:    Per-fault minimum duration before tripping, indexed
+                         by FaultBL2, in 1000 ms intervals.
+    """
+    _fields_ = [
+        ('ActionEnable',   c_uint64 * FAULT_ACTION_NUM_BL2),
+        ('ActionWaitTime', c_uint8  * FAULT_ACTION_NUM_BL2),
+        ('MaxLimit',       c_uint8  * FAULT_NUM_BL2),
+        ('MinDuration',    c_uint8  * FAULT_NUM_BL2),
+    ]
+
+
 # =============================================================================
 # Device Configuration — DeviceConfigStruct in benchlab.h
 #
@@ -524,22 +623,8 @@ class DeviceConfigStruct(Structure):
     """EEPROM-persisted device configuration for ORIGINAL BENCHLAB.
 
     Payload of READ_DEFAULT_CONFIG (0x13) -- the compiled-in default, not the
-    live EEPROM copy. Total size: 426 bytes.
-    """
-    _fields_ = [
-        ('Version',     c_uint8),
-        ('Crc',         c_uint16),
-        ('FriendlyName', c_char * FRIENDLY_NAME_LEN),
-        ('FanProfile',  FanConfigStruct * FAN_NUM * FAN_PROFILE_NUM),
-        ('RGBConfig',   RGBConfigStruct * RGB_PROFILE_NUM),
-    ]
-
-
-class DeviceConfigStructBL2(Structure):
-    """EEPROM-persisted device configuration for BENCHLAB-2.
-
-    Same layout as DeviceConfigStruct plus a trailing FaultConfig. Total
-    size: 560 bytes.
+    live EEPROM copy. Gained a trailing FaultConfig in fw07, when the
+    OTP/OCP fault framework was ported from BL2 (#74). Total size: 504 bytes.
     """
     _fields_ = [
         ('Version',     c_uint8),
@@ -548,6 +633,22 @@ class DeviceConfigStructBL2(Structure):
         ('FanProfile',  FanConfigStruct * FAN_NUM * FAN_PROFILE_NUM),
         ('RGBConfig',   RGBConfigStruct * RGB_PROFILE_NUM),
         ('FaultConfig', FaultConfigStruct),
+    ]
+
+
+class DeviceConfigStructBL2(Structure):
+    """EEPROM-persisted device configuration for BENCHLAB-2.
+
+    Same layout as DeviceConfigStruct, but with BL2's larger FaultConfig.
+    Total size: 560 bytes.
+    """
+    _fields_ = [
+        ('Version',     c_uint8),
+        ('Crc',         c_uint16),
+        ('FriendlyName', c_char * FRIENDLY_NAME_LEN),
+        ('FanProfile',  FanConfigStruct * FAN_NUM * FAN_PROFILE_NUM),
+        ('RGBConfig',   RGBConfigStruct * RGB_PROFILE_NUM),
+        ('FaultConfig', FaultConfigStructBL2),
     ]
 
 
@@ -601,13 +702,20 @@ def _verify_struct_sizes():
             "CalibrationValueStruct": CalibrationValueStruct,
             "SensorStruct": SensorStructOriginal,
             "CalibrationStruct": CalibrationStruct,
+            "FaultConfigStruct": FaultConfigStruct,
             "DeviceConfigStruct": DeviceConfigStruct,
         }),
         (BENCHLAB_BL2_PRODUCT_ID, BENCHLAB_BL2_FIRMWARE_VERSION, {
             "SensorStruct": SensorStructBL2,
             "CalibrationStruct": CalibrationStructBL2,
-            "FaultConfigStruct": FaultConfigStruct,
+            "FaultConfigStruct": FaultConfigStructBL2,
             "DeviceConfigStruct": DeviceConfigStructBL2,
+        }),
+        # The last released pre-fault ORIGINAL firmware -- checks
+        # SensorStructOriginalLegacy against the shorter, still-supported
+        # READ_SENSORS layout that fw06 and below send.
+        (BENCHLAB_ORIGINAL_PRODUCT_ID, BENCHLAB_ORIGINAL_SENSOR_FAULT_FIELDS_FROM - 1, {
+            "SensorStruct": SensorStructOriginalLegacy,
         }),
         # The last released pre-fault BL2 firmware -- checks
         # SensorStructBL2Legacy against the shorter, still-supported

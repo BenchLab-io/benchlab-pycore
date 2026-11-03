@@ -36,8 +36,10 @@ from typing import List, Dict, Optional, Union
 from benchlab_pycore.core.structures import (
     VendorDataStruct,
     SensorStructOriginal,
+    SensorStructOriginalLegacy,
     SensorStructBL2,
     SensorStructBL2Legacy,
+    BENCHLAB_ORIGINAL_SENSOR_FAULT_FIELDS_FROM,
     BENCHLAB_BL2_SENSOR_FAULT_FIELDS_FROM,
     BENCHLAB_CMD,
     BENCHLAB_ORIGINAL_PRODUCT_ID,
@@ -240,8 +242,8 @@ def read_device(ser: serial.Serial) -> Optional[Dict[str, int]]:
         ser (serial.Serial): Opened serial connection to the device.
 
     Returns:
-        Optional[Dict[str, int]]: Dictionary with 'VendorId', 'ProductId', and 'FwVersion' keys,
-                                 or None if read failed.
+        Optional[Dict[str, int]]: Dictionary with 'VendorId', 'ProductId', 'FwVersion',
+                                 and 'PatchVersion' keys, or None if read failed.
 
     Example:
         >>> ser = serial.Serial('COM3', 115200)
@@ -263,6 +265,7 @@ def read_device(ser: serial.Serial) -> Optional[Dict[str, int]]:
             "VendorId": vendor_struct.VendorId,
             "ProductId": vendor_struct.ProductId,
             "FwVersion": vendor_struct.FwVersion,
+            "PatchVersion": vendor_struct.PatchVersion,
         }
     except (serial.SerialException, OSError, ValueError, TypeError) as e:
         logger.warning("Failed to read device: %s", e)
@@ -308,7 +311,7 @@ def read_sensors(
     ser: serial.Serial,
     product_id: Optional[int] = None,
     fw_version: Optional[int] = None
-) -> Optional[Union[SensorStructOriginal, SensorStructBL2, SensorStructBL2Legacy]]:
+) -> Optional[Union[SensorStructOriginal, SensorStructOriginalLegacy, SensorStructBL2, SensorStructBL2Legacy]]:
     """Read all sensors from the device.
 
     Args:
@@ -316,19 +319,20 @@ def read_sensors(
         product_id (Optional[int]): Product ID to determine which sensor structure
                                     to use. Use BENCHLAB_BL2_PRODUCT_ID for BL2 devices,
                                     or BENCHLAB_ORIGINAL_PRODUCT_ID (or None) for original.
-        fw_version (Optional[int]): FwVersion, used on BL2 to pick between the
-                                    fw05+ struct (with FaultStatus/FaultLog) and
-                                    the shorter pre-fw05 layout. If omitted, it
-                                    is probed from the device (see
-                                    _cached_identity).
+        fw_version (Optional[int]): FwVersion, used to pick between the
+                                    fault-aware struct (with FaultStatus/FaultLog --
+                                    BL2 fw05+, ORIGINAL fw07+) and each variant's
+                                    shorter pre-fault layout. If omitted, it is
+                                    probed from the device (see _cached_identity).
 
     Returns:
-        Optional[Union[SensorStructOriginal, SensorStructBL2, SensorStructBL2Legacy]]:
+        Optional[Union[SensorStructOriginal, SensorStructOriginalLegacy, SensorStructBL2, SensorStructBL2Legacy]]:
             Sensor structure object containing all sensor data, or None if
             read failed.
             - Returns SensorStructBL2 for BL2 devices on fw05+
             - Returns SensorStructBL2Legacy for BL2 devices on fw03-fw04
-            - Returns SensorStructOriginal for original devices (default)
+            - Returns SensorStructOriginal for original devices on fw07+ (default)
+            - Returns SensorStructOriginalLegacy for original devices on fw06 and below
 
     Note:
         The returned sensor structure contains raw sensor values. Use translate_sensor_struct()
@@ -371,15 +375,24 @@ def read_sensors(
         _tag_identity(sensors, product_id, fw_version)
         return sensors
     else:
+        # READ_SENSORS grew FaultStatus/FaultLog in fw07 -- a device still on
+        # fw06 and below sends the shorter legacy layout and a fixed
+        # 232-byte read would come up short against it.
+        is_legacy = (
+            fw_version is not None
+            and fw_version < BENCHLAB_ORIGINAL_SENSOR_FAULT_FIELDS_FROM
+        )
+        struct_type = SensorStructOriginalLegacy if is_legacy else SensorStructOriginal
+
         buffer = read_uart(
             ser,
             BENCHLAB_CMD.UART_CMD_READ_SENSORS,
-            sizeof(SensorStructOriginal)
+            sizeof(struct_type)
         )
         if buffer is None:
             logger.warning("Failed to read sensors from device")
             return None
-        sensors = SensorStructOriginal.from_buffer_copy(buffer)
+        sensors = struct_type.from_buffer_copy(buffer)
         _tag_identity(sensors, product_id, fw_version)
         return sensors
 

@@ -1,8 +1,80 @@
-# Migration Guide to benchlab-pycore v0.8.0
+# Migration Guide to benchlab-pycore v0.9.0
 
 This guide covers breaking changes and new features introduced in each version.
 
 ---
+
+## Migrating to v0.9.0
+
+### Python floor raised to 3.11 (action required on 3.9/3.10)
+
+`requires-python` is now `>=3.11` (previously `>=3.9`). Python 3.9 reached
+upstream end-of-life in October 2025; nothing in this library actually
+needed the older floor, so it is dropped rather than kept on CI life
+support. Callers still on Python 3.9 or 3.10 must upgrade their interpreter
+before taking this release.
+
+### Firmware version bump (action required if you pin firmware)
+
+Current firmware moves to ORIGINAL fw07 (`benchlab1/v0.7.0`) and BL2 fw08
+(`benchlab2/v0.8.0`). `BENCHLAB_ORIGINAL_FIRMWARE_VERSION` is now `7`
+(previously `6`); `BENCHLAB_BL2_FIRMWARE_VERSION` is now `8` (previously `7`).
+Both are wire-format-breaking bumps -- devices still running older firmware
+continue to work (older contracts remain vendored), but pycore now targets
+the new generation by default.
+
+### `VendorDataStruct` gained `PatchVersion` (3 -> 4 bytes on the wire)
+
+`READ_VENDOR_DATA` grew a trailing `PatchVersion` byte on both variants --
+the `Z` in the release tag `vX.Y.Z`, baked in at build time (`0xFF` means a
+non-release build and carries no further meaning; it never gates wire
+format). A caller doing a raw
+`read_uart(ser, BENCHLAB_CMD.UART_CMD_READ_VENDOR_DATA, 3)` instead of going
+through `read_device()` will now come up short against current firmware.
+`read_device()`'s returned dict gained a `PatchVersion` key alongside the
+existing `VendorId`/`ProductId`/`FwVersion`.
+
+### New: BL1 (ORIGINAL) fault-protection support (action required for existing BL2 callers)
+
+ORIGINAL fw07 ports the OTP/OCP fault-protection framework from BL2
+(firmware #74): `READ_FAULT`/`WRITE_FAULT` now work on ORIGINAL (previously
+unknown-opcode/no-op there), `SensorStructOriginal` gained trailing
+`FaultStatus`/`FaultLog` fields (216 -> 232 bytes, mirroring BL2 fw05's
+earlier change), and `DeviceConfigStruct` (ORIGINAL) gained a trailing
+`FaultConfig` (426 -> 504 bytes). `read_sensors()` picks the right struct
+for ORIGINAL automatically based on `fw_version`, same as it already does
+for BL2 (`SensorStructOriginalLegacy` below fw07).
+
+ORIGINAL's fault set is a trimmed subset of BL2's -- 16 faults / 4 actions
+vs BL2's 34 / 6 (no HPWR-thermistor OTP tier, no per-wire OCP/current-
+imbalance tier, no buzzer/5VSB action) -- so it needs its own, smaller
+`FaultConfigStruct` (72 bytes vs BL2's 128 bytes). To keep the established
+ORIGINAL-gets-the-base-name / BL2-gets-a-`BL2`-suffix convention (as with
+`CalibrationStruct`/`CalibrationStructBL2`), **the previously BL2-only
+unsuffixed names were renamed**:
+
+| Old name (was BL2-only) | New name |
+|---|---|
+| `Fault` | `FaultBL2` |
+| `FaultAction` | `FaultActionBL2` |
+| `FaultConfigStruct` | `FaultConfigStructBL2` |
+| `FAULT_NUM` | `FAULT_NUM_BL2` |
+| `FAULT_ACTION_NUM` | `FAULT_ACTION_NUM_BL2` |
+
+The base names (`Fault`, `FaultAction`, `FaultConfigStruct`, `FAULT_NUM`,
+`FAULT_ACTION_NUM`) now refer to ORIGINAL's smaller set. **This is a
+breaking rename** -- any caller using the unsuffixed names against a BL2
+device must switch to the `BL2`-suffixed names.
+
+`read_fault()` gained an optional `product_id` parameter to select the
+correct struct, the same way `read_default_config()` already did:
+`read_fault(ser)` (no `product_id`) now returns the 72-byte **ORIGINAL**
+`FaultConfigStruct` by default. **Existing BL2 callers must update to**
+`read_fault(ser, product_id=BENCHLAB_BL2_PRODUCT_ID)` to keep getting the
+128-byte `FaultConfigStructBL2` -- without it they'll silently get an
+ORIGINAL-shaped 72-byte read instead. `write_fault()`'s signature is
+unchanged; it already derives the wire size from the struct instance
+passed in.
 
 ## Migrating to v0.8.0
 

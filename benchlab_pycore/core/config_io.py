@@ -18,8 +18,8 @@ exposed by the BENCHLAB firmware (UART_CMD_* cases in usbd_cdc_if.c):
     UART_CMD_LOAD_CALIBRATION| load_calibration()
     UART_CMD_STORE_CALIBRATION| store_calibration()
     UART_CMD_ACTION          | send_action()
-    UART_CMD_READ_FAULT      | read_fault()          (BENCHLAB 2 only)
-    UART_CMD_WRITE_FAULT     | write_fault()          (BENCHLAB 2 only)
+    UART_CMD_READ_FAULT      | read_fault()
+    UART_CMD_WRITE_FAULT     | write_fault()
     UART_CMD_LOAD_CONFIG     | load_config()
     UART_CMD_STORE_CONFIG    | store_config()
     UART_CMD_READ_DEFAULT_CONFIG| read_default_config()
@@ -82,6 +82,7 @@ from .structures import (
     CalibrationStruct,
     CalibrationStructBL2,
     FaultConfigStruct,
+    FaultConfigStructBL2,
     DeviceConfigStruct,
     DeviceConfigStructBL2,
     CommandStatus,
@@ -840,54 +841,70 @@ def send_action(
 
 
 # ===========================================================================
-# Fault configuration (BENCHLAB 2 only)
+# Fault configuration
 # ===========================================================================
 
-def read_fault(ser: serial.Serial) -> Optional[FaultConfigStruct]:
+def read_fault(
+    ser: serial.Serial,
+    product_id: Optional[int] = None,
+) -> Optional[Union[FaultConfigStruct, FaultConfigStructBL2]]:
     """Read the fault-protection configuration.
 
-    Mirrors ``UART_CMD_READ_FAULT`` (single-byte command). BENCHLAB 2 only --
-    on ORIGINAL this opcode falls through to the unknown-opcode case, so the
-    read will time out and return None.
+    Mirrors ``UART_CMD_READ_FAULT`` (single-byte command). Available on both
+    variants: ORIGINAL fw07+, BL2 fw06+ -- on older firmware this opcode
+    falls through to the unknown-opcode case, so the read will time out and
+    return None.
 
     Args:
-        ser: Open serial connection to the device.
+        ser:        Open serial connection to the device.
+        product_id: Product ID to select the correct fault-configuration
+                    structure. Use ``BENCHLAB_BL2_PRODUCT_ID`` for BL2
+                    devices, or ``BENCHLAB_ORIGINAL_PRODUCT_ID`` / None for
+                    ORIGINAL.
 
     Returns:
-        :class:`FaultConfigStruct` on success, or None on failure.
+        :class:`FaultConfigStructBL2` for BL2 devices,
+        :class:`FaultConfigStruct` for ORIGINAL devices,
+        or None on failure.
 
     Example::
 
-        >>> cfg = read_fault(ser)
+        >>> cfg = read_fault(ser, product_id=info["ProductId"])
         >>> print(cfg.MaxLimit[Fault.OCP_CPU1])
     """
-    data = read_uart(ser, BENCHLAB_CMD.UART_CMD_READ_FAULT, sizeof(FaultConfigStruct))
+    if product_id == BENCHLAB_BL2_PRODUCT_ID:
+        struct_type = FaultConfigStructBL2
+    else:
+        struct_type = FaultConfigStruct
+
+    data = read_uart(ser, BENCHLAB_CMD.UART_CMD_READ_FAULT, sizeof(struct_type))
     if data is None:
         logger.warning("read_fault: failed")
         return None
-    return FaultConfigStruct.from_buffer_copy(data)
+    return struct_type.from_buffer_copy(data)
 
 
-def write_fault(ser: serial.Serial, config: FaultConfigStruct) -> bool:
+def write_fault(ser: serial.Serial, config: Union[FaultConfigStruct, FaultConfigStructBL2]) -> bool:
     """Write the fault-protection configuration.
 
     Mirrors ``UART_CMD_WRITE_FAULT``. Payload layout::
 
-        [cmd(1)] [FaultConfigStruct(128 bytes)]
+        [cmd(1)] [FaultConfigStruct(72 bytes on ORIGINAL, 128 on BL2)]
 
-    BENCHLAB 2 only -- on ORIGINAL this opcode falls through to the
-    unknown-opcode case.
+    Available on both variants: ORIGINAL fw07+, BL2 fw06+ -- on older
+    firmware this opcode falls through to the unknown-opcode case.
 
     Args:
         ser:    Open serial connection to the device.
-        config: :class:`FaultConfigStruct` to write.
+        config: :class:`FaultConfigStruct` or :class:`FaultConfigStructBL2`
+                to write, matching the device's variant.
 
     Returns:
         True if bytes were sent (no ACK from firmware).
 
     Example::
 
-        >>> cfg = read_fault(ser)
+        >>> cfg = read_fault(ser, product_id=info["ProductId"])
         >>> cfg.MaxLimit[Fault.OCP_CPU1] = 50
         >>> write_fault(ser, cfg)
         True

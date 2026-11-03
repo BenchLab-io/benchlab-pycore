@@ -461,7 +461,7 @@ for device in get_fleet_info():
 
 ## Requirements
 
-- Python 3.9+
+- Python 3.11+
 - pyserial >= 3.5
 
 ## Development
